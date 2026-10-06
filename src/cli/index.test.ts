@@ -337,6 +337,112 @@ describe("CLI invocation validation", () => {
     }
   });
 
+  it("rejects deploy when no built site exists", async () => {
+    const workingDirectory = await mkdtemp(
+      join(tmpdir(), "claytube-deploy-missing-site-"),
+    );
+
+    try {
+      process.chdir(workingDirectory);
+      await expect(main(["deploy"])).resolves.toBeUndefined();
+      expect(process.exitCode).toBe(1);
+    } finally {
+      process.chdir("/");
+      await rm(workingDirectory, { recursive: true, force: true });
+      process.exitCode = undefined;
+    }
+  });
+
+  it("publishes a built site to the gh-pages branch when the git remote is configured", async () => {
+    const workingDirectory = await mkdtemp(
+      join(tmpdir(), "claytube-deploy-publish-"),
+    );
+    const siteDir = join(workingDirectory, "dist");
+    const remotePath = join(workingDirectory, "remote.git");
+
+    try {
+      process.chdir(workingDirectory);
+      await mkdir(siteDir, { recursive: true });
+      await writeFile(join(siteDir, "index.html"), "<html>built site</html>");
+
+      const repoInit = spawnSync("git", ["init", "--initial-branch=main"], {
+        cwd: workingDirectory,
+        encoding: "utf8",
+      });
+      expect(repoInit.status).toBe(0);
+
+      const remoteInit = spawnSync("git", ["init", "--bare", remotePath], {
+        cwd: workingDirectory,
+        encoding: "utf8",
+      });
+      expect(remoteInit.status).toBe(0);
+
+      const remoteUrl = `file://${remotePath}`;
+      const remoteAdd = spawnSync("git", ["remote", "add", "origin", remoteUrl], {
+        cwd: workingDirectory,
+        encoding: "utf8",
+      });
+      expect(remoteAdd.status).toBe(0);
+
+      const deploySpy = vi.spyOn(globalThis.console, "log").mockImplementation(() => {});
+
+      await expect(main(["deploy"])).resolves.toBeUndefined();
+      expect(deploySpy).toHaveBeenCalledWith("Published built site to GitHub Pages.");
+      expect(process.exitCode).toBe(0);
+    } finally {
+      process.chdir("/");
+      await rm(workingDirectory, { recursive: true, force: true });
+      process.exitCode = undefined;
+    }
+  });
+
+  it("reports publish failures without mutating the built site or project files", async () => {
+    const workingDirectory = await mkdtemp(
+      join(tmpdir(), "claytube-deploy-failure-"),
+    );
+    const siteDir = join(workingDirectory, "dist");
+
+    try {
+      process.chdir(workingDirectory);
+      await writeFile(
+        "claytube.config.yaml",
+        "site:\n  title: Deployment Failure Site\n  description: Example description\nchannels:\n  - https://youtube.com/@portal\n",
+      );
+      await mkdir(siteDir, { recursive: true });
+      await writeFile(join(siteDir, "index.html"), "<html>built site</html>");
+
+      const repoInit = spawnSync("git", ["init", "--initial-branch=main"], {
+        cwd: workingDirectory,
+        encoding: "utf8",
+      });
+      expect(repoInit.status).toBe(0);
+
+      const remoteUrl = "file:///tmp/this-remote-does-not-exist-for-claytube.git";
+      const remoteAdd = spawnSync("git", ["remote", "add", "origin", remoteUrl], {
+        cwd: workingDirectory,
+        encoding: "utf8",
+      });
+      expect(remoteAdd.status).toBe(0);
+
+      const before = await snapshotTree(workingDirectory);
+      const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      await main(["deploy"]);
+
+      expect(process.exitCode).toBe(1);
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "Publish error: GitHub Pages deployment failed while pushing the gh-pages branch",
+        ),
+      );
+      expect(await snapshotTree(workingDirectory)).toEqual(before);
+    } finally {
+      process.chdir("/");
+      await rm(workingDirectory, { recursive: true, force: true });
+      process.exitCode = undefined;
+    }
+  });
+
   it("builds a site that includes the configured site title and stored content", async () => {
     const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
     const previousCwd = process.cwd();

@@ -207,7 +207,7 @@ Execution order is top to bottom. Task selection and execution follow AGENTS.md.
     - Tests use responses recorded in T-007 and T-009.
     - Unit tests pass.
 
-- [ ] T-016 Publish the Built Site to GitHub Pages
+- [X] T-016 Publish the Built Site to GitHub Pages
   - Satisfies: PRODUCT_SPEC.md §7 FR-07; §11 criterion 8
   - Components: Command Interface, Publisher
   - Depends on: T-013
@@ -222,7 +222,7 @@ Execution order is top to bottom. Task selection and execution follow AGENTS.md.
     - An E2E test against live GitHub Pages passes.
     - Unit tests pass.
 
-- [ ] T-017 Report publish failures
+- [X] T-017 Report publish failures
   - Satisfies: PRODUCT_SPEC.md §7 FR-07; §9 (errors are presented, not ignored)
   - Components: Command Interface, Publisher
   - Depends on: T-016
