@@ -1,304 +1,256 @@
-# ClayTube — TASKS
+# TASKS
 
-Derived from PRODUCT_SPEC.md, ARCHITECTURE.md, TECH_STACK.md and the git history up to `bd82a9e` (2026-10-06).
-
-## Status legend
-
-- `DONE` — commit evidence exists in the git log.
-- `VERIFY` — probably implemented or partly implemented, but the git log alone cannot confirm it. Check against the code and the spec.
-- `TODO` — no evidence of implementation.
-- `DRIFT` — implemented, but the behavior is not defined in PRODUCT_SPEC.md / ARCHITECTURE.md (violates INV-19). Decide: add to spec, or remove.
-
-Each task lists its spec source and a done-when condition. "Done" always means the done-when condition holds, not just that a commit exists.
+Execution order is top to bottom. Task selection and execution follow AGENTS.md.
 
 ---
 
-## 0. Decisions needed first (DRIFT)
+## MVP
 
-These block a clean spec-to-code match, so resolve them before further feature work.
+- [ ] T-001 Project foundation
+  - Satisfies: PRODUCT_SPEC.md §3 (free and open source CLI product)
+  - Components: none
+  - Depends on: none
+  - External boundary: no
+  - Acceptance criteria:
+    - Every constraint in TECH_STACK.md is satisfied.
+    - Every check defined in TECH_STACK.md passes (Section 4 checks and the production build).
+    - Unit tests pass.
 
-### T-000 `DRIFT` Automatic CNAME generation
+- [ ] T-002 Reject unsupported invocations
+  - Satisfies: PRODUCT_SPEC.md §5 (Commands), §9 (errors are presented, not ignored)
+  - Components: Command Interface
+  - Depends on: T-001
+  - External boundary: no
+  - Acceptance criteria:
+    - An unrecognized command exits non-zero with a usage error naming the command.
+    - An unrecognized option exits non-zero with a usage error naming the option.
+    - An unsupported argument exits non-zero with a usage error.
+    - An option given to a command it is not defined for (per PRODUCT_SPEC.md §5 and §7) exits non-zero with a usage error.
+    - After each rejected invocation, no file in the working location is created, modified, or deleted.
+    - Unit tests pass.
 
-- Evidence: `2a72c2e` (generate CNAME during build), then `7522305`, `c94eecb`, `781fba2`, `85b94b2` (moved to root, then to `public/`).
-- Problem: custom domains / CNAME are not in PRODUCT_SPEC.md. ARCHITECTURE.md AR-16 / INV-12 also require identical Built Site content for identical inputs, so a CNAME source must live in Project Configuration or the Presentation Definition.
-- Done when: either (a) PRODUCT_SPEC and ARCHITECTURE add a custom-domain setting to Site Settings with the CNAME rule, or (b) the feature is removed. Whichever is chosen, `claytube.config.yaml` handling in C3 matches it.
+- [ ] T-003 Initialize a project
+  - Satisfies: PRODUCT_SPEC.md §7 FR-01; §11 criterion 1
+  - Components: Command Interface, Project Initializer
+  - Depends on: T-002
+  - External boundary: no
+  - Acceptance criteria:
+    - `claytube init my-site` exits zero and creates a Project at `my-site` containing Project Configuration and Presentation Definition taken from the Project Template.
+    - `claytube init` with no target creates the Project at the current location.
+    - The created Project has no Content Snapshot.
+    - No created content contains the value of a Credential set in the execution environment.
+    - If the target holds existing content that would be overwritten or deleted, init exits non-zero with an initialization error naming the location, and the target is byte-identical to before.
+    - If init fails partway, everything created by that invocation is removed.
+    - Unit tests pass.
 
-### T-001 `DRIFT` TED.com-inspired homepage
+- [ ] T-004 Initialize a project with version control
+  - Satisfies: PRODUCT_SPEC.md §7 FR-01
+  - Components: Command Interface, Project Initializer
+  - Depends on: T-003
+  - External boundary: yes (version control tool)
+  - Acceptance criteria:
+    - `claytube init my-site --git` exits zero and `my-site` is under version control.
+    - `claytube init my-site` without `--git` leaves `my-site` not under version control.
+    - If version control initialization fails, init exits non-zero with an initialization error and everything created by that invocation is removed.
+    - A live observation of the version control tool's initialization behavior is recorded.
+    - An E2E test against the live version control tool passes.
+    - Unit tests pass.
 
-- Evidence: `c3c9cde`.
-- Problem: PRODUCT_SPEC Section 6 and FR-09 define the design principles (large thumbnails, clean typography, editorial layout, minimal UI) but not a TED reference.
-- Done when: the homepage and channel pages are checked against FR-09 and no dashboard-style UI, clutter or heavy filtering remains.
+- [ ] T-005 Validate Project Configuration on sync
+  - Satisfies: PRODUCT_SPEC.md §7 FR-02, FR-03; §9 (invalid YouTube URL)
+  - Components: Command Interface, Configuration Loader, Sync Orchestrator
+  - Depends on: T-003
+  - External boundary: no
+  - Acceptance criteria:
+    - Missing or unreadable Project Configuration makes `claytube sync` exit non-zero with a configuration error naming the location; the Content Store is unchanged.
+    - A malformed channel URL makes `claytube sync` exit non-zero with a configuration error naming the URL; no retrieval is attempted; the Content Store is unchanged.
+    - An empty Channel Source List makes `claytube sync` exit non-zero with a configuration error; no retrieval is attempted; the Content Store is unchanged.
+    - A Channel Source List of well-formed URLs is returned exactly as written (order and duplicates preserved).
+    - Unit tests pass.
 
-### T-002 `DRIFT` CHANGELOG automation workflow
+- [ ] T-006 Fail sync when the Credential is missing
+  - Satisfies: PRODUCT_SPEC.md §9 (missing API key); §7 FR-03
+  - Components: Command Interface, Sync Orchestrator, Content Source Adapter
+  - Depends on: T-005
+  - External boundary: no
+  - Acceptance criteria:
+    - With valid Project Configuration and no Credential in the execution environment, `claytube sync` exits non-zero with a credential error.
+    - No retrieval is attempted before the credential error is reported.
+    - The Content Store is unchanged.
+    - Unit tests pass.
 
-- Evidence: `bd82a9e` (#14).
-- Problem: TECH_STACK Section 6 defines the release workflow (tag trigger, version match, lint/format/test/build before publish, Trusted Publishing). A CHANGELOG workflow is not defined.
-- Done when: TECH_STACK.md is updated to include it, or the workflow is removed. If kept, confirm it uses no long-lived token and stays out of the npm publish path.
+- [ ] T-007 Synchronize a single channel
+  - Satisfies: PRODUCT_SPEC.md §7 FR-03; §6 (Channel Information, Video Information); §11 criteria 3, 4
+  - Components: Command Interface, Configuration Loader, Sync Orchestrator, Content Source Adapter, Content Store
+  - Depends on: T-006
+  - External boundary: yes (YouTube)
+  - Acceptance criteria:
+    - With one valid channel URL and a Credential, `claytube sync` exits zero and the Content Store holds a Content Snapshot containing that Channel and every Video the Content Source makes available for it.
+    - A channel with more Videos than a single Content Source response returns is stored completely.
+    - Each stored Channel and Video has every required field defined in ARCHITECTURE.md Section 2.
+    - The Content Store holds references to media only; it holds no media.
+    - The Credential value appears in none of: Project Configuration, Content Store, standard output, error output.
+    - A live observation of the Content Source's responses for channel resolution and video listing is recorded.
+    - An E2E test against the live Content Source passes.
+    - Unit tests pass.
 
-### T-003 `DRIFT` Mock data and sample channel in the template
+- [ ] T-008 Synchronize multiple channels in canonical order
+  - Satisfies: PRODUCT_SPEC.md §7 FR-02, FR-03; §11 criteria 2, 3
+  - Components: Sync Orchestrator, Content Source Adapter, Content Store
+  - Depends on: T-007
+  - External boundary: no
+  - Acceptance criteria:
+    - With two or more channel URLs configured, the stored Content Snapshot contains the Channels and Videos of all of them.
+    - A channel URL listed more than once is retrieved once, and the stored Content Snapshot contains no duplicate Channel.
+    - The stored Content Snapshot is in the canonical order defined for Sync Orchestrator in ARCHITECTURE.md Section 5, verified with fixtures that include ties.
+    - Two syncs on identical source data and configuration produce byte-identical stored Content Snapshots.
+    - Tests use responses recorded in T-007's live observation.
+    - Unit tests pass.
 
-- Evidence: `c3c9cde` (mock `data/videos.json`), `024bed5` (channel `@cable8mm`).
-- Done when: the Project Template ships a sane default `claytube.config.yaml` and no stale mock data, and C2 guarantees a new Project has no Content Snapshot (ARCHITECTURE C2).
+- [ ] T-009 Make sync all-or-nothing and report source failures
+  - Satisfies: PRODUCT_SPEC.md §7 FR-03; §9 (invalid YouTube URL, errors are presented)
+  - Components: Command Interface, Sync Orchestrator, Content Source Adapter, Content Store
+  - Depends on: T-008
+  - External boundary: yes (YouTube)
+  - Acceptance criteria:
+    - A well-formed channel URL the Content Source cannot resolve makes `claytube sync` exit non-zero with an invalid channel URL error naming the URL; the Content Store is byte-identical to before.
+    - A request the Content Source rejects makes `claytube sync` exit non-zero with a source error identifying the affected channel; the Content Store is byte-identical to before.
+    - With several channels configured, if any one fails, nothing is committed.
+    - If committing fails, the previously stored complete Content Snapshot remains readable and unchanged, and a store error is reported.
+    - Every failure names its category and the affected item as defined in ARCHITECTURE.md Section 9.
+    - No error output contains the Credential value.
+    - A live observation of the Content Source's behavior for an unresolvable channel URL and for a rejected Credential is recorded.
+    - An E2E test against the live Content Source passes for both cases.
+    - Unit tests pass.
+
+- [ ] T-010 Replace the stored snapshot on re-sync
+  - Satisfies: PRODUCT_SPEC.md §7 FR-03, FR-08; §8 Flow 2; §11 criterion 9
+  - Components: Sync Orchestrator, Content Store
+  - Depends on: T-009
+  - External boundary: no
+  - Acceptance criteria:
+    - Given a stored Content Snapshot and source data that adds a Video, removes a Video, and changes a Video title, a successful sync leaves the stored Content Snapshot equal to exactly the newly assembled one.
+    - The same holds for an added Channel and a removed Channel.
+    - A channel removed from the Channel Source List is absent from the stored Content Snapshot after the next successful sync.
+    - A sync on source data identical to the stored Content Snapshot leaves it byte-identical.
+    - Tests use responses recorded in T-007 and T-009.
+    - Unit tests pass.
+
+- [ ] T-011 Preview synchronization with a Change Report
+  - Satisfies: PRODUCT_SPEC.md §7 FR-03, FR-04; §8 Flow 3; §11 criterion 5
+  - Components: Command Interface, Sync Orchestrator
+  - Depends on: T-010
+  - External boundary: no
+  - Acceptance criteria:
+    - A successful `claytube sync` prints a Change Report listing added, removed, and changed Channels and Videos relative to the previously stored Content Snapshot.
+    - With no stored Content Snapshot, every retrieved item is reported as added.
+    - A Video whose title changed is reported as changed, not as removed and added.
+    - `claytube sync --dry-run` prints a Change Report and exits zero; the Content Store, Project Configuration, and every other file in the Project are byte-identical before and after.
+    - On a Project that was never synchronized, `claytube sync --dry-run` leaves it with no Content Snapshot.
+    - The Change Report from `--dry-run` is identical to the one from a real sync on the same inputs.
+    - `--dry-run` reports configuration, credential, invalid channel URL, and source failures exactly as a real sync does, with non-zero exit.
+    - Unit tests pass.
+
+- [ ] T-012 Synchronize with an alternative configuration
+  - Satisfies: PRODUCT_SPEC.md §7 FR-05; §8 Flow 4
+  - Components: Command Interface, Configuration Loader, Sync Orchestrator
+  - Depends on: T-011
+  - External boundary: no
+  - Acceptance criteria:
+    - `claytube sync --config <path>` uses the Channel Source List at `<path>` and ignores the one at the default location.
+    - The same Content Store is written as for `claytube sync` without `--config`.
+    - A missing, unreadable, or invalid configuration at `<path>` produces the same errors as T-005 and leaves the Content Store unchanged.
+    - `--config` and `--dry-run` can be combined; the result is a Change Report with no writes.
+    - Unit tests pass.
+
+- [ ] T-013 Build the video portal
+  - Satisfies: PRODUCT_SPEC.md §7 FR-06, FR-09 (verifiable behavior only); §6 Outputs; §11 criteria 6, 7 (verifiable behavior only)
+  - Components: Command Interface, Configuration Loader, Content Store, Site Builder
+  - Depends on: T-012
+  - External boundary: no
+  - Acceptance criteria:
+    - With a stored Content Snapshot and valid Site Settings, `claytube build` exits zero and produces a Built Site.
+    - The Built Site contains, for each Channel: title, URL, thumbnail; and for each Video: title, associated Channel, published date, thumbnail, URL; verified against provided content.
+    - The site title from Site Settings is rendered; the test verifies the provided value is shown, not its wording.
+    - Channels and Videos appear in Content Snapshot order wherever they are listed.
+    - Serving the Built Site as plain static files renders all of the above.
+    - `claytube build` makes no request to the Content Source.
+    - The Credential value, when set in the execution environment during build, appears nowhere in the Built Site.
+    - The Content Store and Project Configuration are byte-identical before and after `claytube build`.
+    - Two builds with identical Site Settings, Content Snapshot, and Presentation Definition produce identical Built Site content.
+    - After a prior `claytube sync --config <path>`, `claytube build` still reads Site Settings from the default location.
+    - Unit tests pass.
+
+- [ ] T-014 Report build failures without leaving partial output
+  - Satisfies: PRODUCT_SPEC.md §9 (build failure); §7 FR-06
+  - Components: Command Interface, Configuration Loader, Content Store, Site Builder
+  - Depends on: T-013
+  - External boundary: no
+  - Acceptance criteria:
+    - With no Content Snapshot, `claytube build` exits non-zero with a build error and creates no Built Site.
+    - With the site title missing, `claytube build` exits non-zero with an error naming the missing site title, as defined in ARCHITECTURE.md Section 9.
+    - With missing or unreadable Project Configuration, `claytube build` exits non-zero with a configuration error naming the location.
+    - If a build fails after an earlier successful build, the Built Site location holds the earlier complete Built Site, byte-identical; if no earlier Built Site existed, it holds nothing.
+    - The Content Store is byte-identical after every failed build.
+    - Unit tests pass.
+
+- [ ] T-015 Reflect updated content after sync and rebuild
+  - Satisfies: PRODUCT_SPEC.md §7 FR-08; §8 Flow 2; §11 criterion 9
+  - Components: Sync Orchestrator, Content Store, Site Builder
+  - Depends on: T-010, T-014
+  - External boundary: no
+  - Acceptance criteria:
+    - After `claytube sync` discovers a new Video, the Built Site does not contain it until `claytube build` runs; after `claytube build`, it does.
+    - A Video removed at the source is absent from the Built Site after `claytube sync` and `claytube build`.
+    - `claytube sync` alone leaves the Built Site byte-identical.
+    - `claytube build` alone leaves the Content Store byte-identical.
+    - Tests use responses recorded in T-007 and T-009.
+    - Unit tests pass.
+
+- [ ] T-016 Publish the Built Site to GitHub Pages
+  - Satisfies: PRODUCT_SPEC.md §7 FR-07; §11 criterion 8
+  - Components: Command Interface, Publisher
+  - Depends on: T-013
+  - External boundary: yes (GitHub Pages)
+  - Acceptance criteria:
+    - With a complete Built Site and publication authorization in the execution environment, `claytube deploy` exits zero and the Built Site is published to GitHub Pages.
+    - The content retrieved from the published site is identical to the Built Site.
+    - The published output contains no Credential value and no other secret.
+    - `claytube deploy` leaves the Content Store and the Built Site byte-identical.
+    - `claytube deploy` succeeds when Project Configuration and the Content Store are unreadable.
+    - A live observation of GitHub Pages publication behavior is recorded.
+    - An E2E test against live GitHub Pages passes.
+    - Unit tests pass.
+
+- [ ] T-017 Report publish failures
+  - Satisfies: PRODUCT_SPEC.md §7 FR-07; §9 (errors are presented, not ignored)
+  - Components: Command Interface, Publisher
+  - Depends on: T-016
+  - External boundary: yes (GitHub Pages)
+  - Acceptance criteria:
+    - With no complete Built Site, `claytube deploy` exits non-zero with a publish error; the Hosting Target and the Built Site location are unchanged.
+    - When GitHub Pages rejects publication, `claytube deploy` exits non-zero with a publish error naming the failed step; the Built Site, Content Store, and Project Configuration are byte-identical to before.
+    - A live observation of GitHub Pages' response to rejected publication authorization is recorded.
+    - An E2E test against live GitHub Pages passes for the rejected-authorization case.
+    - Unit tests pass.
+
+- [ ] T-018 End-to-end user flows
+  - Satisfies: PRODUCT_SPEC.md §8 Flows 1–4; §11 criteria 1–10; §12 (Product Success)
+  - Components: Command Interface, Project Initializer, Configuration Loader, Sync Orchestrator, Content Source Adapter, Content Store, Site Builder, Publisher
+  - Depends on: T-004, T-012, T-015, T-017
+  - External boundary: yes (YouTube, GitHub Pages)
+  - Acceptance criteria:
+    - From an empty location, using only the installed CLI: init, set the site title and one channel URL in Project Configuration, sync, build, deploy all exit zero, and the published site shows that channel's Videos; no source code is edited.
+    - Adding a second channel URL and repeating sync, build, deploy publishes a site that also shows the second channel's Videos.
+    - An invalid YouTube URL, a missing Credential, and a build failure each produce a non-zero exit and an explicit error.
+    - The live observations recorded in T-004, T-007, T-009, T-016, and T-017 are re-observed and still match.
+    - An E2E test of the full flow against the live YouTube and live GitHub Pages passes.
+    - Unit tests pass.
 
 ---
 
-## 1. Project setup and tooling (TECH_STACK Sections 1–5)
+## Future
 
-### T-100 `DONE` Initial Astro + TypeScript structure
+Future tasks must not be implemented unless the human names them explicitly.
 
-- Evidence: `4a5cf87`.
-- Done when: see T-101 to T-106 for the exact version constraints.
-
-### T-101 `VERIFY` Runtime and version pins
-
-- Source: TECH_STACK Section 1.
-- Check in `package.json`: `engines.node` is 24.x, `"type": "module"`, TypeScript ^6, Astro 7.x, `yaml` ^2, `commander` ^15, Vitest ^5, ESLint ^10, `typescript-eslint` ^8, Prettier ^3, `@types/node` ^24. No `latest`, `*` or unbounded ranges. `package-lock.json` committed.
-- Done when: every item above is true and `npm ci` succeeds on Node 24.
-
-### T-102 `VERIFY` tsconfig and module rules
-
-- Source: TECH_STACK Section 3.
-- Check: `module` and `moduleResolution` are `NodeNext`; `outDir` is `dist-cli/`; relative imports use `.js`; `node:` prefix for built-ins; `import type` for type-only imports; no `@ts-ignore` / `@ts-expect-error`; no `tsx` / `ts-node` in the published CLI.
-- Done when: `tsc` builds to `dist-cli/` cleanly and a grep for the forbidden patterns returns nothing.
-
-### T-103 `DONE` Lint and Prettier
-
-- Evidence: `35b6988`, plus format fix in `ea4a2cd`.
-- Done when: `npm run lint` and `npm run format:check` exist and pass.
-
-### T-104 `VERIFY` `bin` field and `npx` usage
-
-- Evidence: `6bafd88`, `7da36ed`.
-- Source: TECH_STACK Section 2.
-- Done when: `package.json` exposes `claytube` in `bin`, and `npx claytube` works from a clean directory using only the published package contents (including `dist-cli/`).
-
-### T-105 `VERIFY` Secrets hygiene
-
-- Source: TECH_STACK Sections 5 and 7.
-- Evidence: `39e3f7d` (`.env.example`).
-- Check: `.env` is in `.gitignore`; `.env.example` has no real value; `YOUTUBE_API_KEY` is not written to config, JSON data, `dist/`, or referenced in Astro pages/layouts/components; no `PUBLIC_` exposure; `.env` is excluded from the npm package.
-- Done when: a build of a site produces no occurrence of the key value in `dist/`.
-
-### T-106 `DONE` Local development doc
-
-- Evidence: `2c17133` (`npm link` added to `LOCAL_DEVELOPMENT.md`), `e9b8359`, `2d662da`.
-
----
-
-## 2. Components (ARCHITECTURE Section 5)
-
-### C1 — Command Interface
-
-#### T-200 `DONE` CLI exists
-
-- Evidence: `6bafd88`.
-
-#### T-201 `VERIFY` Strict grammar and exit codes
-
-- Source: ARCHITECTURE C1; TECH_STACK Section 3.
-- Done when: only `init`, `sync`, `build`, `deploy` are accepted; only `--git` (init), `--config` and `--dry-run` (sync) exist; unsupported commands, options and arguments give a usage error; every failure exits non-zero and names its category and the affected item (ARCHITECTURE Section 9).
-
-#### T-202 `DONE` CLI smoke tests
-
-- Evidence: `ea4a2cd`.
-
-### C2 — Project Initializer (`init`, FR-01)
-
-#### T-210 `DONE` `claytube init`
-
-- Evidence: `9dd2cd3`.
-
-#### T-211 `VERIFY` Safety guarantees
-
-- Source: ARCHITECTURE C2, Section 9.
-- Done when: `init` never overwrites or deletes existing content; on failure it removes anything it created and leaves the target unchanged; the template contains no real credential.
-
-#### T-212 `TODO` `--git` option
-
-- Source: FR-01.
-- Evidence: none in the log.
-- Done when: `claytube init my-site --git` initializes version control in the new Project; without the flag it does not.
-
-### C3 — Configuration Loader (FR-02, FR-05)
-
-#### T-220 `DONE` Config loading for `claytube.config.yaml`
-
-- Evidence: `9f59410`, `ea4a2cd` (tests).
-
-#### T-221 `DONE` Channel URL parsing and normalization
-
-- Evidence: `3a689b8`, `ea4a2cd` (tests).
-
-#### T-222 `VERIFY` Validation rules
-
-- Source: ARCHITECTURE C3, Section 9.
-- Done when: missing or unreadable config, malformed channel URL (names the URL), empty channel list (at `sync`), and missing site title (at `build`) each give an explicit configuration error; config is returned exactly as written (no dedup, no ordering); C3 never reads or returns the credential.
-
-#### T-223 `VERIFY` `--config` scope
-
-- Source: FR-05; ARCHITECTURE Section 7.3.
-- Done when: `--config` applies to that `sync` only; `build` always reads the default config; the Content Store location does not change.
-
-### C4 — Sync Orchestrator (FR-03, FR-04, FR-08)
-
-#### T-230 `DONE` Basic `claytube sync`
-
-- Evidence: `eb67422`.
-
-#### T-231 `VERIFY` Dedup and canonical order
-
-- Source: ARCHITECTURE C4, AR-10, INV-10, INV-11.
-- Done when: duplicate channel URLs are removed before retrieval; Channels are sorted by title ascending, then identifier ascending; Videos by published date descending, then identifier ascending; sorting happens only in C4.
-
-#### T-232 `VERIFY` All-or-nothing commit (AR-08, INV-08)
-
-- Done when: if any channel fails, nothing is committed and the stored snapshot is byte-identical to before; the commit is one atomic replacement.
-
-#### T-233 `VERIFY` Snapshot replacement (AR-07)
-
-- Done when: videos or channels no longer returned by the source are removed from the store after a successful sync.
-
-#### T-234 `TODO` `--dry-run` and Change Report
-
-- Source: FR-04, AR-09, INV-09.
-- Evidence: none in the log.
-- Done when: `claytube sync --dry-run` prints added / removed / changed Channels and Videos (identity by identifier only, AR-11), writes nothing, and its report is identical to the report from a real run on the same inputs. A missing stored snapshot counts as empty.
-
-### C5 — Content Source Adapter
-
-#### T-240 `DONE` YouTube API key required
-
-- Evidence: `2c17133`.
-
-#### T-241 `VERIFY` YouTube access rules
-
-- Source: TECH_STACK Sections 1 and 3; ARCHITECTURE C5.
-- Done when: only C5 touches the YouTube Data API v3, using built-in `fetch` (no `googleapis`); the key is read only from `process.env.YOUTUBE_API_KEY`; a missing key fails before any retrieval; the key never appears in any log or error message.
-
-#### T-242 `VERIFY` Normalization and completeness
-
-- Source: ARCHITECTURE C5, Section 2.
-- Done when: Channel records have identifier, title, URL and thumbnail reference; Video records have identifier, title, channel identifier, published date, thumbnail reference and URL; all available videos per channel are retrieved (pagination handled).
-
-#### T-243 `VERIFY` Error categories
-
-- Done when: unresolvable URL gives an invalid channel URL error naming the URL; source rejection or unavailability gives a source error naming the channel.
-
-### C6 — Content Store
-
-#### T-250 `DONE` JSON data file in use
-
-- Evidence: `fe93c15`, `c3c9cde` (`data/videos.json`).
-
-#### T-251 `VERIFY` Atomic write and integrity
-
-- Source: ARCHITECTURE C6, INV-07.
-- Done when: replacement is atomic (write to a temp file, then rename); readers see a complete old or new snapshot; the file is UTF-8; it holds references only (no media) and no secrets; writes come only from C4.
-
-### C7 — Site Builder (FR-06, FR-09)
-
-#### T-260 `DONE` Homepage and channel pages
-
-- Evidence: `fe93c15`, `92e121a`.
-
-#### T-261 `VERIFY` Required fields displayed
-
-- Done when: the built site shows Channel title, URL, thumbnail and Video title, associated Channel, published date, thumbnail, URL.
-
-#### T-262 `VERIFY` Build rules
-
-- Source: ARCHITECTURE C7, INV-12, INV-13, INV-15.
-- Done when: `build` fails with a build error if no snapshot exists or the site title is missing; it preserves snapshot order everywhere; it never contacts YouTube or reads the credential; identical inputs give identical output; a failed build leaves the previous complete `dist/` or nothing; output is static with no server adapter or SSR.
-
-#### T-263 `VERIFY` Astro resolution
-
-- Source: TECH_STACK Section 3.
-- Done when: Astro is resolved from the project's installed dependencies, never a global executable, and a clear error appears when Astro is not installed.
-
-### C8 — Publisher (FR-07)
-
-#### T-270 `DONE` GitHub Pages workflow
-
-- Evidence: `c995a6c`, `2099c19`, `addfd35` (`astro.yml`, `deploy.yml` removed), `a138881` (`environment.url`).
-
-#### T-271 `TODO` `claytube deploy` command behavior
-
-- Source: FR-07, ARCHITECTURE C8.
-- Evidence: the log shows a GitHub Actions workflow but no `deploy` CLI command commit.
-- Done when: `claytube deploy` publishes the existing Built Site to GitHub Pages unchanged; it fails with a publish error if no complete Built Site exists; it never runs `sync` or `build`; it uses only environment-supplied authorization; it puts no secret in published output.
-
-#### T-272 `VERIFY` Pages workflow rules
-
-- Source: TECH_STACK Section 6.
-- Done when: the workflow uses Node 24.x, `npm ci`, builds Astro, uploads `dist/` as the artifact, deploys with GitHub Pages actions, uses GitHub-provided permissions, and has no hard-coded credentials.
-
----
-
-## 3. Tests (TECH_STACK Section 4)
-
-### T-300 `DONE` Initial test suite
-
-- Evidence: `ea4a2cd` (config loading, URL normalization, CLI smoke).
-
-### T-301 `TODO` Unit tests for sync logic
-
-- Done when: deterministic, network-free tests cover dedup, canonical ordering, change detection (added / removed / changed), dry-run writes nothing, and all-or-nothing behavior.
-
-### T-302 `TODO` Unit tests for the Content Store and Site Builder
-
-- Done when: tests cover atomic replacement, no-snapshot build failure, missing-title failure, and deterministic output.
-
-### T-303 `TODO` Tests for error paths
-
-- Source: PRODUCT_SPEC Section 9, Acceptance Criterion 10.
-- Done when: tests cover invalid YouTube URL, missing `YOUTUBE_API_KEY`, and build failure, each producing an explicit error and a non-zero exit code.
-
-### T-304 `VERIFY` Test separation
-
-- Done when: test files are named `<implementation>.test.ts` and sit next to the implementation; real-network tests are separate from `npm run test` and from CI; no coverage threshold is enforced; no real key is required.
-
----
-
-## 4. CI and release (TECH_STACK Section 6)
-
-### T-400 `DONE` CI workflow
-
-- Evidence: `2099c19`.
-
-### T-401 `VERIFY` CI steps
-
-- Done when: CI runs `npm ci`, lint, format check, tests and the production build, and fails when any of them fails.
-
-### T-402 `TODO` Release workflow
-
-- Evidence: none in the log (`bd82a9e` is a CHANGELOG workflow only).
-- Done when: a pushed `v*.*.*` tag triggers a workflow that checks the tag matches `package.json` `version`, runs `npm ci`, lint, format check, test and build, then publishes to npm with Trusted Publishing (OIDC), with no `NPM_TOKEN`.
-
-### T-403 `VERIFY` Package contents and license
-
-- Done when: the package is MIT licensed; it includes `dist-cli/` and any template files the CLI needs at runtime; it excludes `.env` and development-only files.
-
----
-
-## 5. Acceptance sweep (PRODUCT_SPEC Section 11)
-
-Run end to end on a clean machine, using only the published package:
-
-- [ ] AC-1 `claytube init my-site` creates a Project with no manual source edits.
-- [ ] AC-2 One or more channels can be configured in `claytube.config.yaml`.
-- [ ] AC-3 / AC-4 `claytube sync` produces usable channel and video data.
-- [ ] AC-5 `claytube sync --dry-run` previews changes and writes nothing.
-- [ ] AC-6 `claytube build` generates the portal.
-- [ ] AC-7 The portal matches the content-focused design principles (FR-09).
-- [ ] AC-8 `claytube deploy` publishes to GitHub Pages.
-- [ ] AC-9 Repeating `sync` → `build` → `deploy` updates the site.
-- [ ] AC-10 Invalid URL, missing key and build failure give explicit errors.
-
----
-
-## Suggested order
-
-1. T-000 to T-003 (settle the drift, since it changes the spec or the code).
-2. T-234 (`--dry-run` / Change Report), T-212 (`--git`), T-271 (`deploy`). These are the missing user-facing commands and options.
-3. T-231 to T-233, T-251 (sync correctness and atomicity), then T-301 to T-303 (tests).
-4. T-402 (release workflow), then the VERIFY items, then the acceptance sweep.
+PRODUCT_SPEC.md defines no Future scope. The MVP is the entire product. This section has no tasks.
