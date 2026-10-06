@@ -378,16 +378,24 @@ describe("CLI invocation validation", () => {
       expect(remoteInit.status).toBe(0);
 
       const remoteUrl = `file://${remotePath}`;
-      const remoteAdd = spawnSync("git", ["remote", "add", "origin", remoteUrl], {
-        cwd: workingDirectory,
-        encoding: "utf8",
-      });
+      const remoteAdd = spawnSync(
+        "git",
+        ["remote", "add", "origin", remoteUrl],
+        {
+          cwd: workingDirectory,
+          encoding: "utf8",
+        },
+      );
       expect(remoteAdd.status).toBe(0);
 
-      const deploySpy = vi.spyOn(globalThis.console, "log").mockImplementation(() => {});
+      const deploySpy = vi
+        .spyOn(globalThis.console, "log")
+        .mockImplementation(() => {});
 
       await expect(main(["deploy"])).resolves.toBeUndefined();
-      expect(deploySpy).toHaveBeenCalledWith("Published built site to GitHub Pages.");
+      expect(deploySpy).toHaveBeenCalledWith(
+        "Published built site to GitHub Pages.",
+      );
       expect(process.exitCode).toBe(0);
     } finally {
       process.chdir("/");
@@ -417,11 +425,16 @@ describe("CLI invocation validation", () => {
       });
       expect(repoInit.status).toBe(0);
 
-      const remoteUrl = "file:///tmp/this-remote-does-not-exist-for-claytube.git";
-      const remoteAdd = spawnSync("git", ["remote", "add", "origin", remoteUrl], {
-        cwd: workingDirectory,
-        encoding: "utf8",
-      });
+      const remoteUrl =
+        "file:///tmp/this-remote-does-not-exist-for-claytube.git";
+      const remoteAdd = spawnSync(
+        "git",
+        ["remote", "add", "origin", remoteUrl],
+        {
+          cwd: workingDirectory,
+          encoding: "utf8",
+        },
+      );
       expect(remoteAdd.status).toBe(0);
 
       const before = await snapshotTree(workingDirectory);

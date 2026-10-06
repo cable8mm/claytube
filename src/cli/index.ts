@@ -4,14 +4,7 @@ import "dotenv/config";
 import { Command, CommanderError } from "commander";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import {
-  cp,
-  mkdir,
-  mkdtemp,
-  readdir,
-  rename,
-  rm,
-} from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, rename, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -286,11 +279,15 @@ export async function deploySite(): Promise<void> {
       );
     }
 
-    const remoteAdd = spawnSync("git", ["remote", "add", "origin", remoteUrl.stdout.trim()], {
-      cwd: stagingDir,
-      env: process.env,
-      encoding: "utf8",
-    });
+    const remoteAdd = spawnSync(
+      "git",
+      ["remote", "add", "origin", remoteUrl.stdout.trim()],
+      {
+        cwd: stagingDir,
+        env: process.env,
+        encoding: "utf8",
+      },
+    );
 
     if (remoteAdd.status !== 0) {
       throw new Error(
