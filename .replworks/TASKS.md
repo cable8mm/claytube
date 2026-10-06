@@ -94,7 +94,7 @@ Execution order is top to bottom. Task selection and execution follow AGENTS.md.
     - An E2E test against the live Content Source passes.
     - Unit tests pass.
 
-- [ ] T-008 Synchronize multiple channels in canonical order
+- [X] T-008 Synchronize multiple channels in canonical order
   - Satisfies: PRODUCT_SPEC.md §7 FR-02, FR-03; §11 criteria 2, 3
   - Components: Sync Orchestrator, Content Source Adapter, Content Store
   - Depends on: T-007
