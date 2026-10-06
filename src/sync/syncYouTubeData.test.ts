@@ -406,4 +406,157 @@ describe("syncYouTubeData", () => {
       await rm(workingDir, { recursive: true, force: true });
     }
   });
+
+  it("computes the same change report for dry-run and a real sync without writing project files", async () => {
+    const previousCwd = process.cwd();
+    const workingDir = await mkdtemp(join(tmpdir(), "claytube-sync-dry-run-"));
+
+    try {
+      process.chdir(workingDir);
+      await mkdir("data", { recursive: true });
+
+      const previousChannels = {
+        channels: [
+          {
+            id: "existing-channel",
+            title: "Existing Channel",
+            url: "https://youtube.com/channel/existing-channel",
+            thumbnail: "https://example.com/existing-channel.jpg",
+          },
+        ],
+      };
+      const previousVideos = {
+        videos: [
+          {
+            id: "existing-video",
+            title: "Old Title",
+            channelId: "existing-channel",
+            publishedAt: "2023-02-01T00:00:00Z",
+            thumbnail: "https://example.com/existing-video.jpg",
+            url: "https://youtube.com/watch?v=existing-video",
+          },
+        ],
+      };
+
+      await writeFile(
+        join(workingDir, "data", "channels.json"),
+        `${JSON.stringify(previousChannels, null, 2)}\n`,
+      );
+      await writeFile(
+        join(workingDir, "data", "videos.json"),
+        `${JSON.stringify(previousVideos, null, 2)}\n`,
+      );
+
+      vi.mocked(resolveYouTubeChannel).mockImplementation(
+        async (channelUrl) => {
+          if (channelUrl === "https://youtube.com/@existing") {
+            return {
+              channel: {
+                id: "existing-channel",
+                title: "Existing Channel",
+                url: "https://youtube.com/channel/existing-channel",
+                thumbnail: "https://example.com/existing-channel.jpg",
+              },
+              uploadsPlaylistId: "existing-upload-list",
+            };
+          }
+
+          if (channelUrl === "https://youtube.com/@new") {
+            return {
+              channel: {
+                id: "new-channel",
+                title: "New Channel",
+                url: "https://youtube.com/channel/new-channel",
+                thumbnail: "https://example.com/new-channel.jpg",
+              },
+              uploadsPlaylistId: "new-upload-list",
+            };
+          }
+
+          throw new Error(`Unexpected channel URL: ${channelUrl}`);
+        },
+      );
+
+      vi.mocked(fetchLatestVideos).mockImplementation(async (channel) => {
+        if (channel.id === "existing-channel") {
+          return [
+            {
+              id: "existing-video",
+              title: "Updated Title",
+              channelId: "existing-channel",
+              publishedAt: "2023-02-01T00:00:00Z",
+              thumbnail: "https://example.com/existing-video.jpg",
+              url: "https://youtube.com/watch?v=existing-video",
+            },
+            {
+              id: "added-video",
+              title: "Added Video",
+              channelId: "existing-channel",
+              publishedAt: "2024-06-01T00:00:00Z",
+              thumbnail: "https://example.com/added-video.jpg",
+              url: "https://youtube.com/watch?v=added-video",
+            },
+          ];
+        }
+
+        if (channel.id === "new-channel") {
+          return [
+            {
+              id: "brand-new-video",
+              title: "Brand New Video",
+              channelId: "new-channel",
+              publishedAt: "2024-07-01T00:00:00Z",
+              thumbnail: "https://example.com/brand-new-video.jpg",
+              url: "https://youtube.com/watch?v=brand-new-video",
+            },
+          ];
+        }
+
+        return [];
+      });
+
+      const config = {
+        site: { title: "Example", description: "A test site" },
+        channels: ["https://youtube.com/@existing", "https://youtube.com/@new"],
+      };
+
+      const dryRunResult = await syncYouTubeData(config, { dryRun: true });
+      const snapshotBefore = {
+        channels: await readFile(
+          join(workingDir, "data", "channels.json"),
+          "utf8",
+        ),
+        videos: await readFile(join(workingDir, "data", "videos.json"), "utf8"),
+      };
+
+      expect(
+        dryRunResult.changeReport?.channels.added.map((channel) => channel.id),
+      ).toEqual(["new-channel"]);
+      expect(dryRunResult.changeReport?.channels.removed).toEqual([]);
+      expect(
+        dryRunResult.changeReport?.videos.changed.map((video) => video.id),
+      ).toEqual(["existing-video"]);
+      expect(
+        dryRunResult.changeReport?.videos.added.map((video) => video.id),
+      ).toEqual(["brand-new-video", "added-video"]);
+      expect(snapshotBefore.channels).toBe(
+        `${JSON.stringify(previousChannels, null, 2)}\n`,
+      );
+      expect(snapshotBefore.videos).toBe(
+        `${JSON.stringify(previousVideos, null, 2)}\n`,
+      );
+
+      const realResult = await syncYouTubeData(config);
+      expect(realResult.changeReport).toEqual(dryRunResult.changeReport);
+      expect(
+        await readFile(join(workingDir, "data", "channels.json"), "utf8"),
+      ).toBe(`${JSON.stringify({ channels: realResult.channels }, null, 2)}\n`);
+      expect(
+        await readFile(join(workingDir, "data", "videos.json"), "utf8"),
+      ).toBe(`${JSON.stringify({ videos: realResult.videos }, null, 2)}\n`);
+    } finally {
+      process.chdir(previousCwd);
+      await rm(workingDir, { recursive: true, force: true });
+    }
+  });
 });

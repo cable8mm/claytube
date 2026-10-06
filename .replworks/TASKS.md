@@ -136,7 +136,7 @@ Execution order is top to bottom. Task selection and execution follow AGENTS.md.
     - Tests use responses recorded in T-007 and T-009.
     - Unit tests pass.
 
-- [ ] T-011 Preview synchronization with a Change Report
+- [X] T-011 Preview synchronization with a Change Report
   - Satisfies: PRODUCT_SPEC.md §7 FR-03, FR-04; §8 Flow 3; §11 criterion 5
   - Components: Command Interface, Sync Orchestrator
   - Depends on: T-010
