@@ -60,7 +60,11 @@ export async function syncYouTubeData(
     videos.push(...channelVideos);
   }
 
-  channels.sort((left, right) => left.title.localeCompare(right.title));
+  channels.sort((left, right) => {
+    const byTitle = left.title.localeCompare(right.title);
+    return byTitle === 0 ? left.id.localeCompare(right.id) : byTitle;
+  });
+
   videos.sort((left, right) => {
     const byDate = right.publishedAt.localeCompare(left.publishedAt);
     return byDate === 0 ? left.id.localeCompare(right.id) : byDate;
