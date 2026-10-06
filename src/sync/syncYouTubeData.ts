@@ -15,13 +15,29 @@ import {
   YouTubeApiError,
 } from "../youtube/client.js";
 
-export interface SyncResult {
+export interface ChangeGroup<T> {
+  added: T[];
+  removed: T[];
+  changed: T[];
+}
+
+export interface ChangeReport {
+  channels: ChangeGroup<Channel>;
+  videos: ChangeGroup<Video>;
+}
+
+export interface Snapshot {
   channels: Channel[];
   videos: Video[];
 }
 
+export interface SyncResult extends Snapshot {
+  changeReport: ChangeReport;
+}
+
 export async function syncYouTubeData(
   config: ClayTubeConfig,
+  options: { dryRun?: boolean } = {},
 ): Promise<SyncResult> {
   if (!Array.isArray(config.channels) || config.channels.length === 0) {
     throw new ConfigError(
@@ -69,12 +85,81 @@ export async function syncYouTubeData(
   });
 
   const nextSnapshot = { channels, videos };
-  await commitSnapshot(nextSnapshot);
+  const previousSnapshot = await readSnapshot();
+  const changeReport = createChangeReport(previousSnapshot, nextSnapshot);
 
-  return nextSnapshot;
+  if (!options.dryRun) {
+    await commitSnapshot(nextSnapshot);
+  }
+
+  return { ...nextSnapshot, changeReport };
 }
 
-async function commitSnapshot(snapshot: SyncResult): Promise<void> {
+export function formatChangeReport(report: ChangeReport): string {
+  const sections = [
+    "Channels:",
+    `  Added: ${describeItems(report.channels.added)}`,
+    `  Removed: ${describeItems(report.channels.removed)}`,
+    `  Changed: ${describeItems(report.channels.changed)}`,
+    "Videos:",
+    `  Added: ${describeItems(report.videos.added)}`,
+    `  Removed: ${describeItems(report.videos.removed)}`,
+    `  Changed: ${describeItems(report.videos.changed)}`,
+  ];
+
+  return sections.join("\n");
+}
+
+function createChangeReport(
+  previousSnapshot: {
+    channels?: ChannelsData;
+    videos?: VideosData;
+  },
+  nextSnapshot: Snapshot,
+): ChangeReport {
+  const previousChannels = previousSnapshot.channels?.channels ?? [];
+  const previousVideos = previousSnapshot.videos?.videos ?? [];
+
+  return {
+    channels: diffItems(previousChannels, nextSnapshot.channels),
+    videos: diffItems(previousVideos, nextSnapshot.videos),
+  };
+}
+
+function diffItems<T extends { id: string }>(
+  previousItems: T[],
+  nextItems: T[],
+): ChangeGroup<T> {
+  const previousById = new Map(previousItems.map((item) => [item.id, item]));
+  const nextById = new Map(nextItems.map((item) => [item.id, item]));
+
+  const added = nextItems.filter((item) => !previousById.has(item.id));
+  const removed = previousItems.filter((item) => !nextById.has(item.id));
+  const changed = nextItems.filter((item) => {
+    const previousItem = previousById.get(item.id);
+    return previousItem !== undefined && !deepEqual(previousItem, item);
+  });
+
+  return { added, removed, changed };
+}
+
+function deepEqual(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function describeItems<T extends { id: string; title?: string }>(
+  items: T[],
+): string {
+  if (items.length === 0) {
+    return "none";
+  }
+
+  return items
+    .map((item) => `${item.title ?? item.id} (${item.id})`)
+    .join(", ");
+}
+
+async function commitSnapshot(snapshot: Snapshot): Promise<void> {
   const previousSnapshot = await readSnapshot();
 
   try {

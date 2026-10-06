@@ -8,7 +8,10 @@ import { cp, mkdir, readdir, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadConfig } from "../config/loadConfig.js";
-import { syncYouTubeData } from "../sync/syncYouTubeData.js";
+import {
+  formatChangeReport,
+  syncYouTubeData,
+} from "../sync/syncYouTubeData.js";
 
 const cliUsage = "Usage: claytube <init|sync|build|deploy> [options]";
 
@@ -140,12 +143,11 @@ export async function initProject(
 
 async function sync(args: string[]): Promise<void> {
   const configPath = readOption(args, "--config") ?? "claytube.config.yaml";
+  const dryRun = args.includes("--dry-run");
   const config = await loadConfig(configPath);
-  const result = await syncYouTubeData(config);
+  const result = await syncYouTubeData(config, { dryRun });
 
-  console.log(
-    `Synced ${result.channels.length} channel(s) and ${result.videos.length} video(s).`,
-  );
+  console.log(formatChangeReport(result.changeReport));
 }
 
 async function buildSite(): Promise<void> {
