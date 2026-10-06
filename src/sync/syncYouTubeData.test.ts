@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -125,6 +125,104 @@ describe("syncYouTubeData", () => {
         "video-beta-1",
         "video-alpha-1",
       ]);
+    } finally {
+      process.chdir(previousCwd);
+      await rm(workingDir, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps the previous content snapshot unchanged when one channel fails", async () => {
+    const previousCwd = process.cwd();
+    const workingDir = await mkdtemp(join(tmpdir(), "claytube-sync-rollback-"));
+
+    try {
+      process.chdir(workingDir);
+      await mkdir("data", { recursive: true });
+
+      const existingChannels = {
+        channels: [
+          {
+            id: "existing-channel",
+            title: "Existing Channel",
+            url: "https://youtube.com/channel/existing-channel",
+            thumbnail: "https://example.com/existing-channel.jpg",
+          },
+        ],
+      };
+      const existingVideos = {
+        videos: [
+          {
+            id: "existing-video",
+            title: "Existing Video",
+            channelId: "existing-channel",
+            publishedAt: "2023-01-01T00:00:00Z",
+            thumbnail: "https://example.com/existing-video.jpg",
+            url: "https://youtube.com/watch?v=existing-video",
+          },
+        ],
+      };
+
+      await writeFile(
+        join(workingDir, "data", "channels.json"),
+        `${JSON.stringify(existingChannels, null, 2)}\n`,
+      );
+      await writeFile(
+        join(workingDir, "data", "videos.json"),
+        `${JSON.stringify(existingVideos, null, 2)}\n`,
+      );
+
+      vi.mocked(resolveYouTubeChannel).mockImplementation(
+        async (channelUrl) => {
+          if (channelUrl === "https://youtube.com/@good") {
+            return {
+              channel: {
+                id: "good-channel",
+                title: "Good Channel",
+                url: "https://youtube.com/channel/good-channel",
+                thumbnail: "https://example.com/good-channel.jpg",
+              },
+              uploadsPlaylistId: "good-upload-list",
+            };
+          }
+
+          if (channelUrl === "https://youtube.com/@bad") {
+            throw new Error("Channel lookup failed");
+          }
+
+          throw new Error(`Unexpected channel URL: ${channelUrl}`);
+        },
+      );
+
+      vi.mocked(fetchLatestVideos).mockImplementation(async (channel) => {
+        if (channel.id === "good-channel") {
+          return [
+            {
+              id: "good-video",
+              title: "Good Video",
+              channelId: "good-channel",
+              publishedAt: "2024-01-01T00:00:00Z",
+              thumbnail: "https://example.com/good-video.jpg",
+              url: "https://youtube.com/watch?v=good-video",
+            },
+          ];
+        }
+
+        return [];
+      });
+
+      await expect(
+        syncYouTubeData({
+          site: { title: "Example", description: "A test site" },
+          channels: ["https://youtube.com/@good", "https://youtube.com/@bad"],
+        }),
+      ).rejects.toThrow(/Channel lookup failed|failed/i);
+
+      expect(
+        await readFile(join(workingDir, "data", "channels.json"), "utf8"),
+      ).toBe(`${JSON.stringify(existingChannels, null, 2)}\n`);
+      expect(
+        await readFile(join(workingDir, "data", "videos.json"), "utf8"),
+      ).toBe(`${JSON.stringify(existingVideos, null, 2)}\n`);
     } finally {
       process.chdir(previousCwd);
       await rm(workingDir, { recursive: true, force: true });
