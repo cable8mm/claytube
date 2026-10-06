@@ -79,7 +79,7 @@ Execution order is top to bottom. Task selection and execution follow AGENTS.md.
     - The Content Store is unchanged.
     - Unit tests pass.
 
-- [ ] T-007 Synchronize a single channel
+- [X] T-007 Synchronize a single channel
   - Satisfies: PRODUCT_SPEC.md §7 FR-03; §6 (Channel Information, Video Information); §11 criteria 3, 4
   - Components: Command Interface, Configuration Loader, Sync Orchestrator, Content Source Adapter, Content Store
   - Depends on: T-006

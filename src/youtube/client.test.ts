@@ -1,5 +1,13 @@
-import { describe, it, expect } from "vitest";
-import { parseChannelReference, normalizeChannelUrl } from "./client.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  fetchLatestVideos,
+  parseChannelReference,
+  normalizeChannelUrl,
+} from "./client.js";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("YouTube URL Normalization", () => {
   it("should normalize @handle input", () => {
@@ -58,5 +66,94 @@ describe("YouTube URL Normalization", () => {
     expect(() =>
       parseChannelReference("https://youtube.com/watch?v=123"),
     ).toThrow();
+  });
+
+  it("should fetch all videos across multiple YouTube pages", async () => {
+    const calls: URLSearchParams[] = [];
+    const fetchMock = vi.fn(async (url: URL | string) => {
+      const requestUrl = typeof url === "string" ? new URL(url) : url;
+      calls.push(new URLSearchParams(requestUrl.search));
+
+      const token = requestUrl.searchParams.get("pageToken");
+      const page = token === "next" ? 2 : 1;
+
+      return {
+        ok: true,
+        json: async () => ({
+          items:
+            page === 1
+              ? [
+                  {
+                    contentDetails: {
+                      videoId: "video-1",
+                      videoPublishedAt: "2024-01-01T00:00:00Z",
+                    },
+                    snippet: {
+                      channelId: "channel-123",
+                      title: "First video",
+                      publishedAt: "2024-01-01T00:00:00Z",
+                      thumbnails: {
+                        high: { url: "https://example.com/1.jpg" },
+                      },
+                    },
+                  },
+                  {
+                    contentDetails: {
+                      videoId: "video-2",
+                      videoPublishedAt: "2024-01-02T00:00:00Z",
+                    },
+                    snippet: {
+                      channelId: "channel-123",
+                      title: "Second video",
+                      publishedAt: "2024-01-02T00:00:00Z",
+                      thumbnails: {
+                        high: { url: "https://example.com/2.jpg" },
+                      },
+                    },
+                  },
+                ]
+              : [
+                  {
+                    contentDetails: {
+                      videoId: "video-3",
+                      videoPublishedAt: "2024-01-03T00:00:00Z",
+                    },
+                    snippet: {
+                      channelId: "channel-123",
+                      title: "Third video",
+                      publishedAt: "2024-01-03T00:00:00Z",
+                      thumbnails: {
+                        high: { url: "https://example.com/3.jpg" },
+                      },
+                    },
+                  },
+                ],
+          nextPageToken: page === 1 ? "next" : undefined,
+        }),
+      };
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const videos = await fetchLatestVideos(
+      {
+        id: "channel-123",
+        title: "Example",
+        url: "https://youtube.com/channel/channel-123",
+        thumbnail: "https://example.com/channel.jpg",
+      },
+      "uploads-playlist",
+      "test-key",
+    );
+
+    expect(videos.map((video) => video.id)).toEqual([
+      "video-1",
+      "video-2",
+      "video-3",
+    ]);
+    expect(calls.map((search) => search.get("pageToken"))).toEqual([
+      null,
+      "next",
+    ]);
   });
 });

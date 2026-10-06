@@ -5,6 +5,7 @@ const MAX_VIDEOS_PER_CHANNEL = 12;
 
 interface YouTubeListResponse<T> {
   items?: T[];
+  nextPageToken?: string;
   error?: {
     message?: string;
   };
@@ -114,37 +115,48 @@ export async function fetchLatestVideos(
   uploadsPlaylistId: string,
   apiKey: string,
 ): Promise<Video[]> {
-  const response = await requestYouTube<YouTubePlaylistItem>(
-    "playlistItems",
-    apiKey,
-    {
-      part: "snippet,contentDetails",
-      playlistId: uploadsPlaylistId,
-      maxResults: String(MAX_VIDEOS_PER_CHANNEL),
-    },
-  );
+  const videos: Video[] = [];
+  let nextPageToken: string | undefined;
 
-  return (response.items ?? [])
-    .map((item): Video | undefined => {
-      const videoId = item.contentDetails?.videoId;
-      const title = item.snippet?.title;
-      const publishedAt =
-        item.contentDetails?.videoPublishedAt ?? item.snippet?.publishedAt;
+  do {
+    const response = await requestYouTube<YouTubePlaylistItem>(
+      "playlistItems",
+      apiKey,
+      {
+        part: "snippet,contentDetails",
+        playlistId: uploadsPlaylistId,
+        maxResults: String(MAX_VIDEOS_PER_CHANNEL),
+        ...(nextPageToken ? { pageToken: nextPageToken } : {}),
+      },
+    );
 
-      if (!videoId || !title || !publishedAt) {
-        return undefined;
-      }
+    const pageVideos = (response.items ?? [])
+      .map((item): Video | undefined => {
+        const videoId = item.contentDetails?.videoId;
+        const title = item.snippet?.title;
+        const publishedAt =
+          item.contentDetails?.videoPublishedAt ?? item.snippet?.publishedAt;
 
-      return {
-        id: videoId,
-        title,
-        channelId: channel.id,
-        publishedAt,
-        thumbnail: pickThumbnail(item.snippet?.thumbnails),
-        url: `https://www.youtube.com/watch?v=${videoId}`,
-      };
-    })
-    .filter((video): video is Video => video !== undefined);
+        if (!videoId || !title || !publishedAt) {
+          return undefined;
+        }
+
+        return {
+          id: videoId,
+          title,
+          channelId: channel.id,
+          publishedAt,
+          thumbnail: pickThumbnail(item.snippet?.thumbnails),
+          url: `https://www.youtube.com/watch?v=${videoId}`,
+        };
+      })
+      .filter((video): video is Video => video !== undefined);
+
+    videos.push(...pageVideos);
+    nextPageToken = response.nextPageToken ?? undefined;
+  } while (nextPageToken);
+
+  return videos;
 }
 
 async function searchChannelId(query: string, apiKey: string): Promise<string> {
