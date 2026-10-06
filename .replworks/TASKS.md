@@ -181,7 +181,7 @@ Execution order is top to bottom. Task selection and execution follow AGENTS.md.
     - After a prior `claytube sync --config <path>`, `claytube build` still reads Site Settings from the default location.
     - Unit tests pass.
 
-- [ ] T-014 Report build failures without leaving partial output
+- [X] T-014 Report build failures without leaving partial output
   - Satisfies: PRODUCT_SPEC.md §9 (build failure); §7 FR-06
   - Components: Command Interface, Configuration Loader, Content Store, Site Builder
   - Depends on: T-013
