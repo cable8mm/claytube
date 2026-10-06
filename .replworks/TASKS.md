@@ -151,7 +151,7 @@ Execution order is top to bottom. Task selection and execution follow AGENTS.md.
     - `--dry-run` reports configuration, credential, invalid channel URL, and source failures exactly as a real sync does, with non-zero exit.
     - Unit tests pass.
 
-- [ ] T-012 Synchronize with an alternative configuration
+- [X] T-012 Synchronize with an alternative configuration
   - Satisfies: PRODUCT_SPEC.md §7 FR-05; §8 Flow 4
   - Components: Command Interface, Configuration Loader, Sync Orchestrator
   - Depends on: T-011
