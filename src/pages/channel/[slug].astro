@@ -1,4 +1,7 @@
 ---
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { parse } from "yaml";
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import VideoCard from "../../components/VideoCard.astro";
 import type {
@@ -6,7 +9,14 @@ import type {
   ChannelsData,
   Video,
   VideosData,
-} from "../../data/types";
+} from "../../data/types.js";
+
+const configSource = readFileSync(
+  join(process.cwd(), "claytube.config.yaml"),
+  "utf-8",
+);
+const config = (parse(configSource) ?? {}) as { site?: { title?: string } };
+const siteTitle = config.site?.title ?? "ClayTube";
 
 export async function getStaticPaths() {
   const [{ existsSync, readFileSync }, { join }, importedVideosData] =
@@ -85,12 +95,12 @@ const videoCountLabel =
 ---
 
 <BaseLayout
-  title={`${channel.title} - ClayTube`}
+  title={`${channel.title} - ${siteTitle}`}
   description={`Latest videos from ${channel.title}.`}
 >
   <main class="site-shell">
     <nav class="masthead" aria-label="Site">
-      <a href="/" class="brand">ClayTube</a>
+      <a href="/" class="brand">{siteTitle}</a>
       <a href="/" class="home-link">Latest videos</a>
     </nav>
 

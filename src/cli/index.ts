@@ -151,11 +151,24 @@ async function sync(args: string[]): Promise<void> {
 }
 
 async function buildSite(): Promise<void> {
-  const astroBinPath = join(process.cwd(), "node_modules", "astro", "astro.js");
+  const config = await loadConfig("claytube.config.yaml");
+  const astroBinPath = join(
+    process.cwd(),
+    "node_modules",
+    "astro",
+    "bin",
+    "astro.mjs",
+  );
 
   if (!existsSync(astroBinPath)) {
     throw new Error(
       "Astro is not installed in this project. Run npm install, then try claytube build again.",
+    );
+  }
+
+  if (!config.site.title || config.site.title.trim() === "") {
+    throw new Error(
+      "claytube.config.yaml: site.title must be a non-empty string",
     );
   }
 
