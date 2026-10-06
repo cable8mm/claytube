@@ -123,7 +123,7 @@ Execution order is top to bottom. Task selection and execution follow AGENTS.md.
     - An E2E test against the live Content Source passes for both cases.
     - Unit tests pass.
 
-- [ ] T-010 Replace the stored snapshot on re-sync
+- [X] T-010 Replace the stored snapshot on re-sync
   - Satisfies: PRODUCT_SPEC.md §7 FR-03, FR-08; §8 Flow 2; §11 criterion 9
   - Components: Sync Orchestrator, Content Store
   - Depends on: T-009
