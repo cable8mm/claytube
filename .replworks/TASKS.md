@@ -43,7 +43,7 @@ Execution order is top to bottom. Task selection and execution follow AGENTS.md.
     - If init fails partway, everything created by that invocation is removed.
     - Unit tests pass.
 
-- [ ] T-004 Initialize a project with version control
+- [X] T-004 Initialize a project with version control
   - Satisfies: PRODUCT_SPEC.md §7 FR-01
   - Components: Command Interface, Project Initializer
   - Depends on: T-003

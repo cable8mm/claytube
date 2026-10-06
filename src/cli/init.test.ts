@@ -133,7 +133,58 @@ describe("claytube init smoke tests", () => {
       "init-test-credential",
     );
   });
+
+  it("should initialize version control only when --git is given", async () => {
+    const gitTarget = join(tempBaseDir, "with-git");
+    const gitInit = runCli(tempBaseDir, ["init", gitTarget, "--git"]);
+
+    expect(gitInit.error).toBeUndefined();
+    expect(gitInit.status).toBe(0);
+    expect(existsSync(join(gitTarget, ".git"))).toBe(true);
+
+    const gitProbe = spawnSync(
+      "git",
+      ["-C", gitTarget, "rev-parse", "--is-inside-work-tree"],
+      { encoding: "utf8" },
+    );
+    expect(gitProbe.status).toBe(0);
+    expect(gitProbe.stdout.trim()).toBe("true");
+
+    const plainTarget = join(tempBaseDir, "without-git");
+    const plainInit = runCli(tempBaseDir, ["init", plainTarget]);
+
+    expect(plainInit.error).toBeUndefined();
+    expect(plainInit.status).toBe(0);
+    expect(existsSync(join(plainTarget, ".git"))).toBe(false);
+  });
+
+  it("should remove the initialized project when Git cannot be run", async () => {
+    const targetDir = join(tempBaseDir, "git-failure");
+    const result = runCli(tempBaseDir, ["init", targetDir, "--git"], {
+      ...process.env,
+      PATH: "",
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("Initialization error");
+    expect(result.stderr).toContain(targetDir);
+    expect(existsSync(targetDir)).toBe(false);
+    expect(await readdir(tempBaseDir)).toEqual([]);
+  });
 });
+
+function runCli(
+  workingDirectory: string,
+  args: string[],
+  env: NodeJS.ProcessEnv = process.env,
+) {
+  return spawnSync(
+    process.execPath,
+    ["--import", tsxLoader, cliEntry, ...args],
+    { cwd: workingDirectory, encoding: "utf8", env },
+  );
+}
 
 async function snapshotTree(
   directory: string,
