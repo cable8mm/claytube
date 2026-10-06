@@ -1,8 +1,10 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, expect } from "vitest";
 import { ConfigError, loadConfig } from "./src/config/loadConfig.js";
+import { syncYouTubeData } from "./src/sync/syncYouTubeData.js";
 import { parseConfig } from "./config.js";
 
 describe("parseConfig", () => {
@@ -101,6 +103,43 @@ describe("loadConfig", () => {
         /https:\/\/not-youtube\.com\/user|invalid channel/i,
       );
     } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("fails before any retrieval or content-store write when the credential is missing", async () => {
+    const previousCredential = process.env.YOUTUBE_API_KEY;
+    delete process.env.YOUTUBE_API_KEY;
+
+    const tempDir = await mkdtemp(join(tmpdir(), "claytube-sync-credential-"));
+    const previousCwd = process.cwd();
+
+    try {
+      process.chdir(tempDir);
+      const beforeState = existsSync(join(tempDir, "data"));
+
+      await expect(
+        syncYouTubeData({
+          site: { title: "My Hub", description: "Example" },
+          channels: ["https://www.youtube.com/@cable8mm"],
+        }),
+      ).rejects.toThrow(/YOUTUBE_API_KEY|credential/i);
+
+      expect(existsSync(join(tempDir, "data"))).toBe(beforeState);
+      if (beforeState) {
+        const fileContents = await readFile(
+          join(tempDir, "data", "channels.json"),
+          "utf8",
+        );
+        expect(fileContents).toContain("existing");
+      }
+    } finally {
+      if (previousCredential === undefined) {
+        delete process.env.YOUTUBE_API_KEY;
+      } else {
+        process.env.YOUTUBE_API_KEY = previousCredential;
+      }
+      process.chdir(previousCwd);
       await rm(tempDir, { recursive: true, force: true });
     }
   });
