@@ -107,7 +107,7 @@ Execution order is top to bottom. Task selection and execution follow AGENTS.md.
     - Tests use responses recorded in T-007's live observation.
     - Unit tests pass.
 
-- [ ] T-009 Make sync all-or-nothing and report source failures
+- [X] T-009 Make sync all-or-nothing and report source failures
   - Satisfies: PRODUCT_SPEC.md §7 FR-03; §9 (invalid YouTube URL, errors are presented)
   - Components: Command Interface, Sync Orchestrator, Content Source Adapter, Content Store
   - Depends on: T-008
