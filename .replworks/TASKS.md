@@ -16,7 +16,7 @@ Execution order is top to bottom. Task selection and execution follow AGENTS.md.
     - Every check defined in TECH_STACK.md passes (Section 4 checks and the production build).
     - Unit tests pass.
 
-- [ ] T-002 Reject unsupported invocations
+- [X] T-002 Reject unsupported invocations
   - Satisfies: PRODUCT_SPEC.md §5 (Commands), §9 (errors are presented, not ignored)
   - Components: Command Interface
   - Depends on: T-001

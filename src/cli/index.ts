@@ -1,34 +1,73 @@
 #!/usr/bin/env node
 
 import "dotenv/config";
+import { Command, CommanderError } from "commander";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { cp, mkdir, readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadConfig } from "../config/loadConfig.js";
 import { syncYouTubeData } from "../sync/syncYouTubeData.js";
 
-async function main(): Promise<void> {
-  const args = process.argv.slice(2);
-  const command = args[0];
+const cliUsage = "Usage: claytube <init|sync|build|deploy> [options]";
 
-  if (command === "init") {
-    await initProject(args.slice(1));
-    return;
+export async function main(args = process.argv.slice(2)): Promise<void> {
+  const program = new Command()
+    .name("claytube")
+    .allowUnknownOption(false)
+    .allowExcessArguments(false)
+    .helpOption(false)
+    .addHelpCommand(false)
+    .exitOverride()
+    .configureOutput({ writeErr: () => {} });
+
+  strictCommand(program.command("init [target]"))
+    .option("--git")
+    .action(async (target: string | undefined, options: { git?: boolean }) => {
+      const initArgs = target === undefined ? [] : [target];
+      if (options.git) {
+        initArgs.push("--git");
+      }
+      await initProject(initArgs);
+    });
+
+  strictCommand(program.command("sync"))
+    .option("--config <path>")
+    .option("--dry-run")
+    .action(async (options: { config?: string; dryRun?: boolean }) => {
+      const syncArgs = ["sync"];
+      if (options.config !== undefined) {
+        syncArgs.push("--config", options.config);
+      }
+      if (options.dryRun) {
+        syncArgs.push("--dry-run");
+      }
+      await sync(syncArgs);
+    });
+
+  strictCommand(program.command("build")).action(() => buildSite());
+  strictCommand(program.command("deploy")).action(() => {
+    throw new Error("The deploy command is not implemented yet.");
+  });
+
+  try {
+    await program.parseAsync(args, { from: "user" });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(
+      error instanceof CommanderError ? `${cliUsage}\n${message}` : message,
+    );
+    process.exitCode = 1;
   }
+}
 
-  if (command === "sync") {
-    await sync(args);
-    return;
-  }
-
-  if (command === "build") {
-    await buildSite(args.slice(1));
-    return;
-  }
-
-  throw new Error("Usage: claytube <init|sync|build> [options]");
+function strictCommand(command: Command): Command {
+  return command
+    .allowUnknownOption(false)
+    .allowExcessArguments(false)
+    .helpOption(false)
+    .addHelpCommand(false);
 }
 
 export async function initProject(args: string[]): Promise<void> {
@@ -65,16 +104,7 @@ async function sync(args: string[]): Promise<void> {
   );
 }
 
-async function buildSite(args: string[]): Promise<void> {
-  const buildArgs: string[] = [];
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--config") {
-      i++;
-      continue;
-    }
-    buildArgs.push(args[i]);
-  }
-
+async function buildSite(): Promise<void> {
   const astroBinPath = join(process.cwd(), "node_modules", "astro", "astro.js");
 
   if (!existsSync(astroBinPath)) {
@@ -83,14 +113,10 @@ async function buildSite(args: string[]): Promise<void> {
     );
   }
 
-  const result = spawnSync(
-    process.execPath,
-    [astroBinPath, "build", ...buildArgs],
-    {
-      env: process.env,
-      stdio: "inherit",
-    },
-  );
+  const result = spawnSync(process.execPath, [astroBinPath, "build"], {
+    env: process.env,
+    stdio: "inherit",
+  });
 
   if (result.error) {
     throw result.error;
@@ -162,8 +188,9 @@ function readOption(args: string[], name: string): string | undefined {
   return value;
 }
 
-main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(message);
-  process.exitCode = 1;
-});
+if (
+  process.argv[1] &&
+  pathToFileURL(resolve(process.argv[1])).href === import.meta.url
+) {
+  await main();
+}
