@@ -1,9 +1,23 @@
 ---
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { parse } from "yaml";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import VideoCard from "../components/VideoCard.astro";
 import videosData from "../../data/videos.json";
-import type { VideosData } from "../data/types";
+import type { VideosData } from "../data/types.js";
 
+const configSource = readFileSync(
+  join(process.cwd(), "claytube.config.yaml"),
+  "utf-8",
+);
+const config = (parse(configSource) ?? {}) as {
+  site?: { title?: string; description?: string };
+};
+const siteTitle = config.site?.title ?? "ClayTube";
+const siteDescription =
+  config.site?.description ??
+  "A static-first editorial video portal generated from curated YouTube channels.";
 const { videos } = videosData as VideosData;
 const sortedVideos = [...videos].sort((left, right) => {
   const byDate = right.publishedAt.localeCompare(left.publishedAt);
@@ -38,14 +52,11 @@ const formatPublishedDate = (publishedAt: string) =>
   }).format(new Date(publishedAt));
 ---
 
-<BaseLayout
-  title="ClayTube"
-  description="A static-first editorial video portal generated from curated YouTube channels."
->
+<BaseLayout title={siteTitle} description={siteDescription}>
   <main class="site-shell">
     <header class="masthead">
-      <a href="/" class="brand">ClayTube</a>
-      <p>Curated talks, lectures, and field notes.</p>
+      <a href="/" class="brand">{siteTitle}</a>
+      <p>{siteDescription}</p>
     </header>
 
     {

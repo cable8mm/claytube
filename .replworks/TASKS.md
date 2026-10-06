@@ -163,7 +163,7 @@ Execution order is top to bottom. Task selection and execution follow AGENTS.md.
     - `--config` and `--dry-run` can be combined; the result is a Change Report with no writes.
     - Unit tests pass.
 
-- [ ] T-013 Build the video portal
+- [X] T-013 Build the video portal
   - Satisfies: PRODUCT_SPEC.md §7 FR-06, FR-09 (verifiable behavior only); §6 Outputs; §11 criteria 6, 7 (verifiable behavior only)
   - Components: Command Interface, Configuration Loader, Content Store, Site Builder
   - Depends on: T-012
