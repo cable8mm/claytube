@@ -4,7 +4,7 @@ import "dotenv/config";
 import { Command, CommanderError } from "commander";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { cp, mkdir, readdir, rm } from "node:fs/promises";
+import { cp, mkdir, readdir, rename, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadConfig } from "../config/loadConfig.js";
@@ -150,8 +150,25 @@ async function sync(args: string[]): Promise<void> {
   console.log(formatChangeReport(result.changeReport));
 }
 
-async function buildSite(): Promise<void> {
+export async function buildSite(): Promise<void> {
   const config = await loadConfig("claytube.config.yaml");
+
+  if (!config.site.title || config.site.title.trim() === "") {
+    throw new Error("Build error: site.title must be a non-empty string");
+  }
+
+  const snapshotFiles = [
+    join(process.cwd(), "data", "channels.json"),
+    join(process.cwd(), "data", "videos.json"),
+  ];
+  const hasSnapshot = snapshotFiles.every((filePath) => existsSync(filePath));
+
+  if (!hasSnapshot) {
+    throw new Error(
+      "Build error: No content snapshot found. Run claytube sync before claytube build.",
+    );
+  }
+
   const astroBinPath = join(
     process.cwd(),
     "node_modules",
@@ -166,22 +183,53 @@ async function buildSite(): Promise<void> {
     );
   }
 
-  if (!config.site.title || config.site.title.trim() === "") {
-    throw new Error(
-      "claytube.config.yaml: site.title must be a non-empty string",
-    );
+  const distPath = join(process.cwd(), "dist");
+  const backupSuffix = `.${Date.now()}.${Math.random().toString(16).slice(2)}`;
+  const backupPath = `${distPath}${backupSuffix}`;
+  const hadPreviousBuild = existsSync(distPath);
+
+  try {
+    if (hadPreviousBuild) {
+      await rename(distPath, backupPath);
+    }
+
+    const result = spawnSync(process.execPath, [astroBinPath, "build"], {
+      env: process.env,
+      stdio: "inherit",
+    });
+
+    if (result.error) {
+      throw result.error;
+    }
+
+    if (result.status !== 0) {
+      throw new Error(
+        `Build error: Astro build failed with exit code ${result.status ?? "unknown"}`,
+      );
+    }
+
+    process.exitCode = 0;
+  } catch (error: unknown) {
+    if (existsSync(distPath)) {
+      await rm(distPath, { recursive: true, force: true });
+    }
+
+    if (hadPreviousBuild && existsSync(backupPath)) {
+      await rename(backupPath, distPath);
+    } else if (existsSync(backupPath)) {
+      await rm(backupPath, { recursive: true, force: true });
+    }
+
+    if (error instanceof Error && error.message.startsWith("Build error:")) {
+      throw error;
+    }
+
+    const reason = getErrorMessage(error);
+    const finalMessage = reason.startsWith("Build error:")
+      ? reason
+      : `Build error: ${reason}`;
+    throw new Error(finalMessage, { cause: error });
   }
-
-  const result = spawnSync(process.execPath, [astroBinPath, "build"], {
-    env: process.env,
-    stdio: "inherit",
-  });
-
-  if (result.error) {
-    throw result.error;
-  }
-
-  process.exitCode = result.status ?? 1;
 }
 
 function initGit(cwd: string): void {

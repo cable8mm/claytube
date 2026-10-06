@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import {
   mkdtemp,
   mkdir,
@@ -151,6 +152,43 @@ describe("CLI invocation validation", () => {
       expect(logSpy.mock.calls.at(-1)?.[0]).toContain("Added");
       expect(logSpy.mock.calls.at(-1)?.[0]).toContain("alternate-channel");
     } finally {
+      process.chdir("/");
+      await rm(workingDirectory, { recursive: true, force: true });
+    }
+  });
+
+  it("fails build cleanly when the content snapshot is missing", async () => {
+    const workingDirectory = await mkdtemp(
+      join(tmpdir(), "claytube-build-no-snapshot-"),
+    );
+
+    try {
+      process.chdir(workingDirectory);
+      await writeFile(
+        "claytube.config.yaml",
+        [
+          "site:",
+          "  title: Missing Snapshot Site",
+          "  description: Example description",
+          "channels:",
+          "  - https://youtube.com/@portal",
+          "",
+        ].join("\n"),
+      );
+
+      const before = await snapshotTree(workingDirectory);
+      const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      await main(["build"]);
+
+      expect(process.exitCode).toBe(1);
+      expect(await snapshotTree(workingDirectory)).toEqual(before);
+      expect(existsSync(join(workingDirectory, "dist"))).toBe(false);
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Build error: No content snapshot"),
+      );
+    } finally {
+      process.exitCode = undefined;
       process.chdir("/");
       await rm(workingDirectory, { recursive: true, force: true });
     }
