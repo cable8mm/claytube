@@ -1,15 +1,16 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    "types": ["node"],
     "allowImportingTsExtensions": false,
     "declaration": true,
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "noEmit": false,
-    "outDir": "dist/cli",
+    "outDir": "dist-cli",
     "rootDir": "src",
     "sourceMap": true
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["src/env.d.ts"]
+  "exclude": ["src/env.d.ts", "src/**/*.test.ts"]
 }

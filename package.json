@@ -1,21 +1,27 @@
 {
   "name": "claytube",
   "version": "0.1.0",
+  "license": "MIT",
+  "engines": {
+    "node": "24.x"
+  },
   "type": "module",
   "bin": {
     "claytube": "./bin/claytube.mjs"
   },
   "files": [
     "bin",
-    "dist/cli",
+    "dist-cli",
     "templates",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "dev": "astro dev",
     "build": "npm run build:site && npm run build:cli",
     "build:site": "astro build",
-    "build:cli": "tsc -p tsconfig.cli.json && chmod +x dist/cli/cli/index.js",
+    "prebuild:cli": "node --input-type=module -e \"import { rm } from 'node:fs/promises'; await rm('dist-cli', { recursive: true, force: true });\"",
+    "build:cli": "tsc -p tsconfig.cli.json",
     "format": "prettier --write . && markdownlint-cli2 --fix \"**/*.md\" \"#node_modules\"",
     "format:check": "prettier --check . && markdownlint-cli2 \"**/*.md\" \"#node_modules\"",
     "lint": "eslint .",
@@ -27,6 +33,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "commander": "^15.0.0",
     "dotenv": "^16.6.1",
     "yaml": "^2.6.1"
   },
@@ -36,8 +43,8 @@
   ],
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@types/node": "^22.0.0",
-    "astro": "^5.0.0",
+    "@types/node": "^24.0.0",
+    "astro": "^7.0.0",
     "astro-eslint-parser": "^1.4.0",
     "eslint": "^10.4.0",
     "eslint-config-prettier": "^10.1.8",
@@ -46,9 +53,9 @@
     "prettier": "^3.8.3",
     "prettier-plugin-astro": "^0.14.1",
     "tsx": "^4.20.0",
-    "typescript": "^5.0.0",
+    "typescript": "^6.0.0",
     "typescript-eslint": "^8.59.4",
-    "vitest": "^2.1.0"
+    "vitest": "^5.0.0"
   },
   "bundleDependencies": [
     "yaml",

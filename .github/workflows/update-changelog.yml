@@ -25,6 +25,11 @@ jobs:
           # is not out of date.
           ref: ${{ github.event.release.target_commitish }}
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
       - name: Check if branch and release match
         if: ${{ github.event.release.target_commitish != 'main' && github.event.release.target_commitish != 'master' }}
         id: guard
