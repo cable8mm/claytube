@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { ConfigError } from "../config/loadConfig.js";
 import type { ClayTubeConfig } from "../config/loadConfig.js";
 import type {
   Channel,
@@ -9,6 +10,7 @@ import type {
 } from "../data/types.js";
 import {
   fetchLatestVideos,
+  parseChannelReference,
   resolveYouTubeChannel,
   YouTubeApiError,
 } from "../youtube/client.js";
@@ -21,16 +23,21 @@ export interface SyncResult {
 export async function syncYouTubeData(
   config: ClayTubeConfig,
 ): Promise<SyncResult> {
-  const uniqueChannelUrls = [...new Set(config.channels)];
+  if (!Array.isArray(config.channels) || config.channels.length === 0) {
+    throw new ConfigError(
+      "claytube.config.yaml: channels must contain at least one YouTube channel URL",
+    );
+  }
+
+  const uniqueChannelUrls = [
+    ...new Set(config.channels.map((channel) => channel.trim())),
+  ];
+  for (const channelUrl of uniqueChannelUrls) {
+    parseChannelReference(channelUrl);
+  }
+
   const channels: Channel[] = [];
   const videos: Video[] = [];
-
-  if (uniqueChannelUrls.length === 0) {
-    await writeJson("data/channels.json", { channels });
-    await writeJson("data/videos.json", { videos });
-
-    return { channels, videos };
-  }
 
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) {

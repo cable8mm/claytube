@@ -56,7 +56,7 @@ Execution order is top to bottom. Task selection and execution follow AGENTS.md.
     - An E2E test against the live version control tool passes.
     - Unit tests pass.
 
-- [ ] T-005 Validate Project Configuration on sync
+- [X] T-005 Validate Project Configuration on sync
   - Satisfies: PRODUCT_SPEC.md §7 FR-02, FR-03; §9 (invalid YouTube URL)
   - Components: Command Interface, Configuration Loader, Sync Orchestrator
   - Depends on: T-003
