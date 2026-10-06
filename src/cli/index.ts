@@ -4,7 +4,7 @@ import "dotenv/config";
 import { Command, CommanderError } from "commander";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { cp, mkdir, readdir } from "node:fs/promises";
+import { cp, mkdir, readdir, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadConfig } from "../config/loadConfig.js";
@@ -70,28 +70,72 @@ function strictCommand(command: Command): Command {
     .addHelpCommand(false);
 }
 
-export async function initProject(args: string[]): Promise<void> {
+export async function initProject(
+  args: string[],
+  copyEntry: typeof cp = cp,
+): Promise<void> {
   const targetArg = args.find((arg) => !arg.startsWith("-")) ?? ".";
   const targetDir = resolve(targetArg);
   const shouldInitGit = args.includes("--git");
+  const targetExists = existsSync(targetDir);
 
-  if (existsSync(targetDir)) {
-    const entries = await readdir(targetDir);
+  if (targetExists) {
+    let entries: string[];
+    try {
+      entries = await readdir(targetDir);
+    } catch (error: unknown) {
+      throw new Error(
+        `Initialization error: cannot read target ${targetDir}: ${getErrorMessage(error)}`,
+        { cause: error },
+      );
+    }
 
     if (entries.length > 0) {
-      throw new Error(`${targetDir} is not empty`);
+      throw new Error(`Initialization error: ${targetDir} is not empty.`);
     }
   } else {
     await mkdir(targetDir, { recursive: true });
   }
 
-  await copyTemplate(findTemplateDir(), targetDir);
+  const createdEntries: string[] = [];
+  try {
+    await copyTemplate(findTemplateDir(), targetDir, createdEntries, copyEntry);
 
-  if (shouldInitGit) {
-    initGit(targetDir);
+    if (shouldInitGit) {
+      initGit(targetDir);
+    }
+
+    console.log(`Created ClayTube project at ${targetDir}`);
+  } catch (error: unknown) {
+    const cleanupErrors: unknown[] = [];
+    if (targetExists) {
+      for (const entry of createdEntries) {
+        try {
+          await rm(join(targetDir, entry), { recursive: true, force: true });
+        } catch (cleanupError: unknown) {
+          cleanupErrors.push(cleanupError);
+        }
+      }
+    } else {
+      try {
+        await rm(targetDir, { recursive: true, force: true });
+      } catch (cleanupError: unknown) {
+        cleanupErrors.push(cleanupError);
+      }
+    }
+
+    const reason = getErrorMessage(error);
+    if (cleanupErrors.length > 0) {
+      throw new AggregateError(
+        [error, ...cleanupErrors],
+        `Initialization error at ${targetDir}; cleanup failed: ${cleanupErrors.map(getErrorMessage).join("; ")}`,
+        { cause: error },
+      );
+    }
+    throw new Error(`Initialization error at ${targetDir}: ${reason}`, {
+      cause: error,
+    });
   }
-
-  console.log(`Created ClayTube project at ${targetDir}`);
 }
 
 async function sync(args: string[]): Promise<void> {
@@ -144,18 +188,23 @@ function initGit(cwd: string): void {
 async function copyTemplate(
   templateDir: string,
   targetDir: string,
+  createdEntries: string[],
+  copyEntry: typeof cp,
 ): Promise<void> {
   const entries = await readdir(templateDir);
 
-  await Promise.all(
-    entries.map((entry) =>
-      cp(join(templateDir, entry), join(targetDir, entry), {
-        recursive: true,
-        errorOnExist: true,
-        force: false,
-      }),
-    ),
-  );
+  for (const entry of entries) {
+    createdEntries.push(entry);
+    await copyEntry(join(templateDir, entry), join(targetDir, entry), {
+      recursive: true,
+      errorOnExist: true,
+      force: false,
+    });
+  }
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function findTemplateDir(): string {

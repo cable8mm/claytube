@@ -29,7 +29,7 @@ Execution order is top to bottom. Task selection and execution follow AGENTS.md.
     - After each rejected invocation, no file in the working location is created, modified, or deleted.
     - Unit tests pass.
 
-- [ ] T-003 Initialize a project
+- [X] T-003 Initialize a project
   - Satisfies: PRODUCT_SPEC.md §7 FR-01; §11 criterion 1
   - Components: Command Interface, Project Initializer
   - Depends on: T-002
