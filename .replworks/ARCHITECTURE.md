@@ -13,7 +13,7 @@
 ## 2. Core Concepts
 
 | Concept | Definition |
-|---|---|
+| --- | --- |
 | Project | A user-owned unit containing Project Configuration, Presentation Definition, and a Content Store. Created by `init`. |
 | Project Configuration | User-authored settings: Site Settings and Channel Source List. Contains no Credential. |
 | Site Settings | Site-level values used to present the portal. Contains at minimum the site title. |
@@ -82,7 +82,7 @@ Commands are user-driven and independent. No command invokes another command.
 ## 4. Components
 
 | ID | Component |
-|---|---|
+| --- | --- |
 | C1 | Command Interface |
 | C2 | Project Initializer |
 | C3 | Configuration Loader |
@@ -99,6 +99,7 @@ Commands are user-driven and independent. No command invokes another command.
 ### C1 — Command Interface
 
 **Responsibilities**
+
 - MUST recognize exactly these commands: `init`, `sync`, `build`, `deploy`.
 - MUST recognize exactly these options: `--git` (init), `--config` and `--dry-run` (sync).
 - MUST reject unsupported commands, options, and arguments with an explicit usage error.
@@ -110,12 +111,14 @@ Commands are user-driven and independent. No command invokes another command.
 **Outputs:** dispatch request to one component; user-visible messages; invocation status.
 
 **Ownership boundary**
+
 - Owns: command grammar, usage errors, error presentation, invocation status.
 - Does NOT own: configuration, content, Credential, or any domain logic.
 
 ### C2 — Project Initializer
 
 **Responsibilities**
+
 - MUST create a Project at the target location (current location when none is given).
 - MUST populate the Project exclusively from the Project Template.
 - MUST NOT overwrite or delete existing content in the target location.
@@ -129,12 +132,14 @@ Commands are user-driven and independent. No command invokes another command.
 **Outputs:** populated Project (Project Configuration, Presentation Definition); optional version-control initialization; result or error.
 
 **Ownership boundary**
+
 - Owns: Project Template, Project creation.
 - Does NOT own: reading configuration, synchronization, building, publishing.
 
 ### C3 — Configuration Loader
 
 **Responsibilities**
+
 - MUST locate Project Configuration: the default location, or the alternate location supplied for `sync`.
 - MUST parse Project Configuration and report an explicit configuration error if it is missing or unreadable.
 - MUST provide Site Settings to C7.
@@ -148,12 +153,14 @@ Commands are user-driven and independent. No command invokes another command.
 **Outputs:** Site Settings or Channel Source List; configuration error.
 
 **Ownership boundary**
+
 - Owns: reading and validating Project Configuration.
 - Does NOT own: Credential (MUST NOT read, accept, or return it), content, retrieval, writing configuration.
 
 ### C4 — Sync Orchestrator
 
 **Responsibilities**
+
 - MUST coordinate the complete `sync` flow (Section 3.2).
 - MUST remove duplicate channel URLs before retrieval.
 - MUST confirm Credential availability through C5 before any retrieval.
@@ -170,12 +177,14 @@ Commands are user-driven and independent. No command invokes another command.
 **Outputs:** Change Report; committed Content Snapshot (non-dry-run only); errors.
 
 **Ownership boundary**
+
 - Owns: deduplication, canonical ordering, snapshot assembly, change detection, commit decision.
 - Does NOT own: configuration parsing (C3), retrieval or normalization (C5), persistence mechanics (C6), presentation (C7).
 
 ### C5 — Content Source Adapter
 
 **Responsibilities**
+
 - MUST be the only component that accesses the Content Source.
 - MUST be the only component that reads or uses the Credential.
 - MUST read the Credential only from the execution environment.
@@ -190,12 +199,14 @@ Commands are user-driven and independent. No command invokes another command.
 **Outputs:** Channel record; Video records; credential error, invalid channel URL error, or source error.
 
 **Ownership boundary**
+
 - Owns: Content Source access, Credential use, normalization into the Content Model.
 - Does NOT own: ordering, deduplication of channel URLs, change detection, persistence, configuration.
 
 ### C6 — Content Store
 
 **Responsibilities**
+
 - MUST hold exactly one Content Snapshot per Project.
 - MUST accept a complete replacement of the Content Snapshot from C4 only.
 - MUST make each replacement atomic: readers see the previous complete Content Snapshot or the new complete Content Snapshot, never a partial one.
@@ -208,12 +219,14 @@ Commands are user-driven and independent. No command invokes another command.
 **Outputs:** Content Snapshot or "no Content Snapshot"; store error.
 
 **Ownership boundary**
+
 - Owns: persistence and integrity of the Content Snapshot.
 - Does NOT own: how snapshots are assembled, ordered, compared, or presented.
 
 ### C7 — Site Builder
 
 **Responsibilities**
+
 - MUST obtain Site Settings from C3 using the default configuration location.
 - MUST obtain the Content Snapshot from C6.
 - MUST fail with a build error when no Content Snapshot exists or Site Settings are invalid.
@@ -230,12 +243,14 @@ Commands are user-driven and independent. No command invokes another command.
 **Outputs:** Built Site; build error.
 
 **Ownership boundary**
+
 - Owns: transformation of Site Settings and Content Snapshot into the Built Site; the Built Site location.
 - Does NOT own: content retrieval, content ordering, Content Store writes, publication.
 
 ### C8 — Publisher
 
 **Responsibilities**
+
 - MUST publish the Built Site to the Hosting Target.
 - MUST fail with a publish error when no complete Built Site exists.
 - MUST publish the Built Site unchanged.
@@ -248,6 +263,7 @@ Commands are user-driven and independent. No command invokes another command.
 **Outputs:** published site at the Hosting Target; publish error.
 
 **Ownership boundary**
+
 - Owns: transfer of the Built Site to the Hosting Target.
 - Does NOT own: building, content, configuration, Content Source access.
 
@@ -258,7 +274,7 @@ Commands are user-driven and independent. No command invokes another command.
 ### 6.1 Requirement Ownership
 
 | PRODUCT_SPEC requirement | Owner | Supporting |
-|---|---|---|
+| --- | --- | --- |
 | FR-01 Initialize a project (`init`, `--git`) | C2 | C1 |
 | FR-02 Configure channels | C3 | — |
 | FR-03 Synchronize (`sync`) | C4 | C1, C3, C5, C6 |
@@ -275,7 +291,7 @@ Commands are user-driven and independent. No command invokes another command.
 ### 6.2 Single-Owner Rules
 
 | Responsibility | Sole owner |
-|---|---|
+| --- | --- |
 | Command grammar and usage errors | C1 |
 | Error presentation and invocation status | C1 |
 | Project creation and Project Template | C2 |
@@ -308,7 +324,7 @@ Commands are user-driven and independent. No command invokes another command.
 ### 7.1 Artifacts and Ownership
 
 | Artifact | Producer | Consumers | Persistent |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Project Configuration | User (initial from C2) | C3 | Yes |
 | Presentation Definition | C2 (initial); then user | C7 | Yes |
 | Credential | User (execution environment) | C5 | No (never stored by ClayTube) |
@@ -379,7 +395,7 @@ deploy:  User → C1 → C8
 ## 9. Failure Boundaries
 
 | Failure | Detected by | Effect | State guarantee | Reported by |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | Unsupported command / option / argument | C1 | Invocation stops before dispatch | No state changes | C1 |
 | Target cannot be populated without overwriting | C2 | `init` fails | Target unchanged | C1 |
 | `init` fails partway | C2 | Content created by the invocation is removed | No partial Project remains | C1 |
