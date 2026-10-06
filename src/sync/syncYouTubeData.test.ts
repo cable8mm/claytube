@@ -228,4 +228,182 @@ describe("syncYouTubeData", () => {
       await rm(workingDir, { recursive: true, force: true });
     }
   });
+
+  it("replaces the stored snapshot on a successful re-sync and keeps no-op sync byte-identical", async () => {
+    const previousCwd = process.cwd();
+    const workingDir = await mkdtemp(join(tmpdir(), "claytube-sync-resync-"));
+
+    try {
+      process.chdir(workingDir);
+      await mkdir("data", { recursive: true });
+
+      const previousChannels = {
+        channels: [
+          {
+            id: "stale-channel",
+            title: "Stale Channel",
+            url: "https://youtube.com/channel/stale-channel",
+            thumbnail: "https://example.com/stale-channel.jpg",
+          },
+          {
+            id: "kept-channel",
+            title: "Kept Channel",
+            url: "https://youtube.com/channel/kept-channel",
+            thumbnail: "https://example.com/kept-channel.jpg",
+          },
+        ],
+      };
+      const previousVideos = {
+        videos: [
+          {
+            id: "stale-video",
+            title: "Stale Video",
+            channelId: "stale-channel",
+            publishedAt: "2023-01-01T00:00:00Z",
+            thumbnail: "https://example.com/stale-video.jpg",
+            url: "https://youtube.com/watch?v=stale-video",
+          },
+          {
+            id: "kept-video",
+            title: "Old Title",
+            channelId: "kept-channel",
+            publishedAt: "2024-03-01T00:00:00Z",
+            thumbnail: "https://example.com/kept-video.jpg",
+            url: "https://youtube.com/watch?v=kept-video",
+          },
+        ],
+      };
+
+      await writeFile(
+        join(workingDir, "data", "channels.json"),
+        `${JSON.stringify(previousChannels, null, 2)}\n`,
+      );
+      await writeFile(
+        join(workingDir, "data", "videos.json"),
+        `${JSON.stringify(previousVideos, null, 2)}\n`,
+      );
+
+      vi.mocked(resolveYouTubeChannel).mockImplementation(
+        async (channelUrl) => {
+          if (channelUrl === "https://youtube.com/@kept") {
+            return {
+              channel: {
+                id: "kept-channel",
+                title: "Kept Channel",
+                url: "https://youtube.com/channel/kept-channel",
+                thumbnail: "https://example.com/kept-channel.jpg",
+              },
+              uploadsPlaylistId: "kept-upload-list",
+            };
+          }
+
+          if (channelUrl === "https://youtube.com/@new") {
+            return {
+              channel: {
+                id: "new-channel",
+                title: "New Channel",
+                url: "https://youtube.com/channel/new-channel",
+                thumbnail: "https://example.com/new-channel.jpg",
+              },
+              uploadsPlaylistId: "new-upload-list",
+            };
+          }
+
+          throw new Error(`Unexpected channel URL: ${channelUrl}`);
+        },
+      );
+
+      vi.mocked(fetchLatestVideos).mockImplementation(async (channel) => {
+        if (channel.id === "kept-channel") {
+          return [
+            {
+              id: "kept-video",
+              title: "Updated Title",
+              channelId: "kept-channel",
+              publishedAt: "2024-03-01T00:00:00Z",
+              thumbnail: "https://example.com/kept-video.jpg",
+              url: "https://youtube.com/watch?v=kept-video",
+            },
+            {
+              id: "new-kept-video",
+              title: "New kept video",
+              channelId: "kept-channel",
+              publishedAt: "2024-04-01T00:00:00Z",
+              thumbnail: "https://example.com/new-kept-video.jpg",
+              url: "https://youtube.com/watch?v=new-kept-video",
+            },
+          ];
+        }
+
+        if (channel.id === "new-channel") {
+          return [
+            {
+              id: "new-video",
+              title: "New video",
+              channelId: "new-channel",
+              publishedAt: "2024-05-01T00:00:00Z",
+              thumbnail: "https://example.com/new-video.jpg",
+              url: "https://youtube.com/watch?v=new-video",
+            },
+          ];
+        }
+
+        return [];
+      });
+
+      const nextSnapshot = await syncYouTubeData({
+        site: { title: "Example", description: "A test site" },
+        channels: ["https://youtube.com/@kept", "https://youtube.com/@new"],
+      });
+
+      expect(nextSnapshot.channels.map((channel) => channel.id)).toEqual([
+        "kept-channel",
+        "new-channel",
+      ]);
+      expect(nextSnapshot.videos.map((video) => video.id)).toEqual([
+        "new-video",
+        "new-kept-video",
+        "kept-video",
+      ]);
+
+      const channelsFile = await readFile(
+        join(workingDir, "data", "channels.json"),
+        "utf8",
+      );
+      const videosFile = await readFile(
+        join(workingDir, "data", "videos.json"),
+        "utf8",
+      );
+
+      expect(channelsFile).toBe(
+        `${JSON.stringify({ channels: nextSnapshot.channels }, null, 2)}\n`,
+      );
+      expect(videosFile).toBe(
+        `${JSON.stringify({ videos: nextSnapshot.videos }, null, 2)}\n`,
+      );
+
+      const beforeNoop = {
+        channels: await readFile(
+          join(workingDir, "data", "channels.json"),
+          "utf8",
+        ),
+        videos: await readFile(join(workingDir, "data", "videos.json"), "utf8"),
+      };
+
+      await syncYouTubeData({
+        site: { title: "Example", description: "A test site" },
+        channels: ["https://youtube.com/@kept", "https://youtube.com/@new"],
+      });
+
+      expect(
+        await readFile(join(workingDir, "data", "channels.json"), "utf8"),
+      ).toBe(beforeNoop.channels);
+      expect(
+        await readFile(join(workingDir, "data", "videos.json"), "utf8"),
+      ).toBe(beforeNoop.videos);
+    } finally {
+      process.chdir(previousCwd);
+      await rm(workingDir, { recursive: true, force: true });
+    }
+  });
 });
