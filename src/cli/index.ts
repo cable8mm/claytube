@@ -4,8 +4,9 @@ import "dotenv/config";
 import { Command, CommanderError } from "commander";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { cp, mkdir, readdir, rename, rm } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, rename, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadConfig } from "../config/loadConfig.js";
 import {
@@ -50,9 +51,7 @@ export async function main(args = process.argv.slice(2)): Promise<void> {
     });
 
   strictCommand(program.command("build")).action(() => buildSite());
-  strictCommand(program.command("deploy")).action(() => {
-    throw new Error("The deploy command is not implemented yet.");
-  });
+  strictCommand(program.command("deploy")).action(() => deploySite());
 
   try {
     await program.parseAsync(args, { from: "user" });
@@ -229,6 +228,134 @@ export async function buildSite(): Promise<void> {
       ? reason
       : `Build error: ${reason}`;
     throw new Error(finalMessage, { cause: error });
+  }
+}
+
+export async function deploySite(): Promise<void> {
+  const siteDir = resolve(process.cwd(), "dist");
+  const indexPath = join(siteDir, "index.html");
+
+  if (!existsSync(indexPath)) {
+    throw new Error("Publish error: no complete built site found.");
+  }
+
+  const repoRoot = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+  });
+
+  if (repoRoot.status !== 0 || !repoRoot.stdout.trim()) {
+    throw new Error(
+      "Publish error: a Git repository is required for GitHub Pages deployment.",
+    );
+  }
+
+  const remoteUrl = spawnSync("git", ["remote", "get-url", "origin"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+  });
+
+  if (remoteUrl.status !== 0 || !remoteUrl.stdout.trim()) {
+    throw new Error(
+      "Publish error: Git remote origin is not configured for GitHub Pages deployment.",
+    );
+  }
+
+  const tempRoot = await mkdtemp(join(tmpdir(), "claytube-deploy-"));
+
+  try {
+    const stagingDir = join(tempRoot, "site");
+    await mkdir(stagingDir, { recursive: true });
+
+    const init = spawnSync("git", ["init", "--initial-branch=gh-pages"], {
+      cwd: stagingDir,
+      env: process.env,
+      encoding: "utf8",
+    });
+
+    if (init.status !== 0) {
+      throw new Error(
+        `Publish error: unable to initialize the gh-pages branch: ${init.stderr || init.stdout || "unknown git error"}`,
+      );
+    }
+
+    const remoteAdd = spawnSync(
+      "git",
+      ["remote", "add", "origin", remoteUrl.stdout.trim()],
+      {
+        cwd: stagingDir,
+        env: process.env,
+        encoding: "utf8",
+      },
+    );
+
+    if (remoteAdd.status !== 0) {
+      throw new Error(
+        `Publish error: unable to configure publication remote: ${remoteAdd.stderr || remoteAdd.stdout || "unknown git error"}`,
+      );
+    }
+
+    for (const entry of await readdir(siteDir)) {
+      const source = join(siteDir, entry);
+      const target = join(stagingDir, entry);
+      await cp(source, target, { recursive: true, force: true });
+    }
+
+    const add = spawnSync("git", ["add", "."], {
+      cwd: stagingDir,
+      env: process.env,
+      encoding: "utf8",
+    });
+
+    if (add.status !== 0) {
+      throw new Error(
+        `Publish error: unable to stage the site for publication: ${add.stderr || add.stdout || "unknown git error"}`,
+      );
+    }
+
+    const commit = spawnSync(
+      "git",
+      [
+        "-c",
+        "user.name=ClayTube",
+        "-c",
+        "user.email=claytube@local",
+        "commit",
+        "-m",
+        "Deploy ClayTube site",
+      ],
+      {
+        cwd: stagingDir,
+        env: process.env,
+        encoding: "utf8",
+      },
+    );
+
+    if (commit.status !== 0) {
+      const output = `${commit.stdout || ""}${commit.stderr || ""}`.trim();
+      if (!output.includes("nothing to commit")) {
+        throw new Error(
+          `Publish error: unable to commit the published site: ${output || "unknown git error"}`,
+        );
+      }
+    }
+
+    const push = spawnSync("git", ["push", "origin", "HEAD:gh-pages"], {
+      cwd: stagingDir,
+      env: process.env,
+      encoding: "utf8",
+    });
+
+    if (push.status !== 0) {
+      throw new Error(
+        `Publish error: GitHub Pages deployment failed while pushing the gh-pages branch: ${push.stderr || push.stdout || "unknown git error"}`,
+      );
+    }
+
+    console.log("Published built site to GitHub Pages.");
+    process.exitCode = 0;
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
   }
 }
 
