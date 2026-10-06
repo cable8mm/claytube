@@ -4,8 +4,7 @@ import "dotenv/config";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { cp, mkdir, readdir } from "node:fs/promises";
-import { createRequire } from "node:module";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "../config/loadConfig.js";
 import { syncYouTubeData } from "../sync/syncYouTubeData.js";
@@ -76,18 +75,14 @@ async function buildSite(args: string[]): Promise<void> {
     buildArgs.push(args[i]);
   }
 
-  const require = createRequire(join(process.cwd(), "package.json"));
-  let astroPackagePath: string;
+  const astroBinPath = join(process.cwd(), "node_modules", "astro", "astro.js");
 
-  try {
-    astroPackagePath = require.resolve("astro/package.json");
-  } catch {
+  if (!existsSync(astroBinPath)) {
     throw new Error(
       "Astro is not installed in this project. Run npm install, then try claytube build again.",
     );
   }
 
-  const astroBinPath = join(dirname(astroPackagePath), "astro.js");
   const result = spawnSync(
     process.execPath,
     [astroBinPath, "build", ...buildArgs],

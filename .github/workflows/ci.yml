@@ -17,26 +17,20 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22" # 🟢 Target Node.js version 22
-          cache: "npm" # ⚡ Enable caching to significantly speed up builds
+          node-version: "24"
+          cache: "npm"
 
       - name: Install Dependencies
-        run: npm ci # Clean install based on package-lock.json
+        run: npm ci
 
-      # Step 1: Lint & Format Checks
-      - name: Check Code Quality & Formatting
-        run: |
-          npm run lint
-          npx prettier --check .
+      - name: Lint
+        run: npm run lint
 
-      # Step 2: Run Tests (Vitest Integration)
-      - name: Run Unit Tests
+      - name: Check Formatting
+        run: npm run format:check
+
+      - name: Test
         run: npm run test
 
-      # Step 3: Build Test
-      # For React(Vite), a successful static build proves there are no syntax or type errors.
-      - name: Run Build Test
+      - name: Build
         run: npm run build
-
-      # Step 4: Update Changelog (Add existing actions if needed)
-      # You can append your existing changelog action below to run on push or specific conditions.

@@ -6,7 +6,7 @@ Execution order is top to bottom. Task selection and execution follow AGENTS.md.
 
 ## MVP
 
-- [ ] T-001 Project foundation
+- [X] T-001 Project foundation
   - Satisfies: PRODUCT_SPEC.md §3 (free and open source CLI product)
   - Components: none
   - Depends on: none
