@@ -194,7 +194,7 @@ Execution order is top to bottom. Task selection and execution follow AGENTS.md.
     - The Content Store is byte-identical after every failed build.
     - Unit tests pass.
 
-- [ ] T-015 Reflect updated content after sync and rebuild
+- [X] T-015 Reflect updated content after sync and rebuild
   - Satisfies: PRODUCT_SPEC.md §7 FR-08; §8 Flow 2; §11 criterion 9
   - Components: Sync Orchestrator, Content Store, Site Builder
   - Depends on: T-010, T-014

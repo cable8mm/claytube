@@ -194,6 +194,149 @@ describe("CLI invocation validation", () => {
     }
   });
 
+  it("sync updates content without mutating the built site, and build refreshes the site without mutating the data store", async () => {
+    const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+    const previousCwd = process.cwd();
+    const originalConfig = await readFile(
+      join(repoRoot, "claytube.config.yaml"),
+      "utf8",
+    );
+    const originalChannels = await readFile(
+      join(repoRoot, "data", "channels.json"),
+      "utf8",
+    );
+    const originalVideos = await readFile(
+      join(repoRoot, "data", "videos.json"),
+      "utf8",
+    );
+
+    try {
+      process.chdir(repoRoot);
+      await writeFile(
+        join(repoRoot, "claytube.config.yaml"),
+        [
+          "site:",
+          "  title: Example Portal",
+          "  description: Example description",
+          "channels:",
+          "  - https://youtube.com/@portal",
+          "",
+        ].join("\n"),
+      );
+      await writeFile(
+        join(repoRoot, "data", "channels.json"),
+        JSON.stringify(
+          {
+            channels: [
+              {
+                id: "portal-channel",
+                title: "Portal Channel",
+                url: "https://youtube.com/channel/portal-channel",
+                thumbnail: "https://example.com/channel.jpg",
+              },
+            ],
+          },
+          null,
+          2,
+        ) + "\n",
+      );
+      await writeFile(
+        join(repoRoot, "data", "videos.json"),
+        JSON.stringify(
+          {
+            videos: [
+              {
+                id: "portal-video",
+                title: "Portal Launch Video",
+                channelId: "portal-channel",
+                publishedAt: "2024-06-01T00:00:00Z",
+                thumbnail: "https://example.com/video.jpg",
+                url: "https://youtube.com/watch?v=portal-video",
+              },
+            ],
+          },
+          null,
+          2,
+        ) + "\n",
+      );
+      await mkdir(join(repoRoot, "dist"), { recursive: true });
+      const legacyHtml = "<html><body>legacy portal</body></html>";
+      await writeFile(join(repoRoot, "dist", "index.html"), legacyHtml, "utf8");
+
+      vi.mocked(resolveYouTubeChannel).mockResolvedValue({
+        channel: {
+          id: "portal-channel",
+          title: "Portal Channel",
+          url: "https://youtube.com/channel/portal-channel",
+          thumbnail: "https://example.com/channel.jpg",
+        },
+        uploadsPlaylistId: "portal-upload-list",
+      });
+      vi.mocked(fetchLatestVideos).mockResolvedValue([
+        {
+          id: "portal-video",
+          title: "Portal Launch Video",
+          channelId: "portal-channel",
+          publishedAt: "2024-06-01T00:00:00Z",
+          thumbnail: "https://example.com/video.jpg",
+          url: "https://youtube.com/watch?v=portal-video",
+        },
+        {
+          id: "portal-video-2",
+          title: "Portal Follow-up Video",
+          channelId: "portal-channel",
+          publishedAt: "2024-06-02T00:00:00Z",
+          thumbnail: "https://example.com/video-2.jpg",
+          url: "https://youtube.com/watch?v=portal-video-2",
+        },
+      ]);
+
+      const beforeDist = await readFile(
+        join(repoRoot, "dist", "index.html"),
+        "utf8",
+      );
+      await main(["sync"]);
+      const afterSyncDist = await readFile(
+        join(repoRoot, "dist", "index.html"),
+        "utf8",
+      );
+      expect(afterSyncDist).toBe(beforeDist);
+
+      const updatedVideos = JSON.parse(
+        await readFile(join(repoRoot, "data", "videos.json"), "utf8"),
+      ) as { videos: { id: string; title: string }[] };
+      expect(updatedVideos.videos.map((video) => video.id)).toContain(
+        "portal-video-2",
+      );
+
+      const beforeBuildData = await readFile(
+        join(repoRoot, "data", "videos.json"),
+        "utf8",
+      );
+      await main(["build"]);
+      const builtHtml = await readFile(
+        join(repoRoot, "dist", "index.html"),
+        "utf8",
+      );
+      expect(builtHtml).toContain("Portal Follow-up Video");
+
+      const afterBuildData = await readFile(
+        join(repoRoot, "data", "videos.json"),
+        "utf8",
+      );
+      expect(afterBuildData).toBe(beforeBuildData);
+    } finally {
+      await writeFile(join(repoRoot, "claytube.config.yaml"), originalConfig);
+      await writeFile(
+        join(repoRoot, "data", "channels.json"),
+        originalChannels,
+      );
+      await writeFile(join(repoRoot, "data", "videos.json"), originalVideos);
+      process.chdir(previousCwd);
+      process.exitCode = undefined;
+    }
+  });
+
   it("builds a site that includes the configured site title and stored content", async () => {
     const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
     const previousCwd = process.cwd();
