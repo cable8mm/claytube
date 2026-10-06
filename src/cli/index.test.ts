@@ -291,7 +291,10 @@ describe("CLI invocation validation", () => {
         },
       ]);
 
-      const beforeDist = await readFile(join(repoRoot, "dist", "index.html"), "utf8");
+      const beforeDist = await readFile(
+        join(repoRoot, "dist", "index.html"),
+        "utf8",
+      );
       await main(["sync"]);
       const afterSyncDist = await readFile(
         join(repoRoot, "dist", "index.html"),
