@@ -68,7 +68,7 @@ Execution order is top to bottom. Task selection and execution follow AGENTS.md.
     - A Channel Source List of well-formed URLs is returned exactly as written (order and duplicates preserved).
     - Unit tests pass.
 
-- [ ] T-006 Fail sync when the Credential is missing
+- [X] T-006 Fail sync when the Credential is missing
   - Satisfies: PRODUCT_SPEC.md §9 (missing API key); §7 FR-03
   - Components: Command Interface, Sync Orchestrator, Content Source Adapter
   - Depends on: T-005
